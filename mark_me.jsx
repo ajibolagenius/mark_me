@@ -192,6 +192,11 @@ const I = {
   AZ: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h4M4 18h4M4 12h6"/><path d="M17 3v18M14 18l3 3 3-3"/></svg>,
   Hash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 9h16M4 15h16M10 3l-2 18M16 3l-2 18"/></svg>,
   Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+  Brain: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a6 6 0 0 0-6 6c0 1.66.68 3.16 1.76 4.24L12 16.48l4.24-4.24A6 6 0 0 0 12 2z"/><path d="M9.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM14.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/><path d="M12 16.5V22"/></svg>,
+  Sparkle: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>,
+  Tab: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="0"/><path d="M2 8h20"/><path d="M8 4v4"/></svg>,
+  Crown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 20h20M4 16l2-12 6 6 6-6 2 12z"/></svg>,
+  Send: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>,
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -956,6 +961,8 @@ function LandingPage({ onNavigate }) {
     { icon: <I.Chrome />, title: "Chrome Extension", desc: "One-click save from any page — auto-tagged, auto-categorized", soon: true },
     { icon: <I.Cloud />, title: "Cloud Sync", desc: "Firebase-backed storage keeps your bookmarks safe across devices", soon: true },
     { icon: <I.Layout />, title: "Bio Website", desc: "Generate a sleek link-in-bio page from your public bookmarks", soon: true },
+    { icon: <I.Tab />, title: "New Tab Override", desc: "Replace Chrome's new tab with your bookmarks, clock, and quick search", isNew: true },
+    { icon: <I.Sparkle />, title: "AI Assistant", desc: "Auto-tag, summarize, and discover connections across your bookmarks", isNew: true },
   ];
 
   const stats = [
@@ -974,7 +981,11 @@ function LandingPage({ onNavigate }) {
       <nav aria-label="Site navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <Logo />
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            {[{label:"Pricing",page:"pricing"},{label:"Extension",page:"newtab"}].map(l=>(
+              <button key={l.page} onClick={()=>onNavigate(l.page)} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:"7px 12px", fontSize:13 }}
+                onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}>{l.label}</button>
+            ))}
             <button onClick={()=>onNavigate("login")} style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"7px 16px", border:`1px solid ${T.border}` }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}>Log in</button>
             <button onClick={()=>onNavigate("signup")} style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
@@ -1051,11 +1062,12 @@ function LandingPage({ onNavigate }) {
           <h2 style={{ fontFamily:T.font, fontSize:"clamp(1.5rem, 3vw, 2rem)", fontWeight:800, letterSpacing:"-0.03em", marginBottom:12 }}>Everything you need.</h2>
           <p style={{ color:T.textSec, fontSize:15, maxWidth:400, margin:"0 auto" }}>A focused set of tools to replace the browser bookmark bar forever.</p>
         </div>
-        <div className="mm-features-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:1, background:T.border }}>
+        <div className="mm-features-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:T.border }}>
           {features.map((f,i) => (
             <div key={i} style={{ background:T.bg, padding:"32px 28px", position:"relative", overflow:"hidden", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*70}ms both`, transition:"background 0.2s" }}
               onMouseEnter={e=>e.currentTarget.style.background=T.bgEl} onMouseLeave={e=>e.currentTarget.style.background=T.bg}>
               {f.soon && <span style={{ position:"absolute", top:12, right:12, fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", color:T.warning, background:T.warning+"18", padding:"2px 6px", border:`1px solid ${T.warning}30` }}>Soon</span>}
+              {f.isNew && <span style={{ position:"absolute", top:12, right:12, fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", color:T.secondary, background:T.secondarySubtle, padding:"2px 6px", border:`1px solid ${T.secondary}30` }}>New</span>}
               <div style={{ width:40, height:40, background:T.primarySubtle, border:`1px solid ${T.primary}25`, display:"flex", alignItems:"center", justifyContent:"center", color:T.primary, marginBottom:16 }}>{f.icon}</div>
               <h3 style={{ fontFamily:T.font, fontSize:15, fontWeight:800, color:T.text, marginBottom:8, letterSpacing:"-0.02em" }}>{f.title}</h3>
               <p style={{ fontSize:13, color:T.textMuted, lineHeight:1.5 }}>{f.desc}</p>
@@ -1080,11 +1092,20 @@ function LandingPage({ onNavigate }) {
       <footer style={{ borderTop:`1px solid ${T.border}`, position:"relative", zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"24px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
           <Logo size={20} />
-          <span style={{ fontSize:12, color:T.textMuted }}>&copy; 2026 mark_me. All rights reserved.</span>
+          <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+            {[{label:"Pricing",p:"pricing"},{label:"Extension",p:"newtab"}].map(l=>(
+              <button key={l.p} onClick={()=>onNavigate(l.p)} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:0, fontSize:12 }}
+                onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}>{l.label}</button>
+            ))}
+            <span style={{ fontSize:12, color:T.textMuted }}>&copy; 2026 mark_me</span>
+          </div>
         </div>
       </footer>
 
       <style>{`
+        @media (max-width: 900px) {
+          .mm-features-grid { grid-template-columns: repeat(2,1fr) !important; }
+        }
         @media (max-width: 768px) {
           .mm-features-grid { grid-template-columns: 1fr !important; }
           .mm-landing-stats { grid-template-columns: repeat(2,1fr) !important; }
@@ -1558,6 +1579,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
   const [mobileNav,setMobileNav]=useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
   const [sortBy, setSortBy] = useState("default");
+  const [showAi, setShowAi] = useState(false);
   const fileRef=useRef(null); const { flash, flashUndo, ToastEl } = useUndoToast();
   const isSearching = searchInput !== debouncedSearch;
 
@@ -1627,6 +1649,10 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
             <button onClick={exportData} title="Export" aria-label="Export bookmarks as JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Export /></button>
             <button onClick={()=>fileRef.current?.click()} title="Import" aria-label="Import bookmarks from JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Import /></button>
             <input ref={fileRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} aria-hidden="true" tabIndex={-1} />
+            <button onClick={()=>setShowAi(true)} title="AI Assistant" aria-label="Open AI assistant" style={{ ...S.btn, background:T.primarySubtle, color:T.primary, padding:"6px 10px", border:`1px solid ${T.primary}30`, position:"relative" }}
+              onMouseEnter={e=>{e.currentTarget.style.background=T.primary+"25"}} onMouseLeave={e=>{e.currentTarget.style.background=T.primarySubtle}}>
+              <I.Sparkle /><span style={{ position:"absolute", top:-2, right:-2, width:6, height:6, background:T.secondary, borderRadius:"50%" }} />
+            </button>
             <button onClick={()=>setShowNewCat(true)} aria-label="Create new category" style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)", transition:"all 0.15s cubic-bezier(0.4,0,0.2,1)" }}
               onMouseDown={e=>{e.currentTarget.style.transform="scale(0.95)";e.currentTarget.style.boxShadow="1px 1px 0 rgba(0,0,0,0.2)"}}
               onMouseUp={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}}
@@ -1643,6 +1669,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
       {mobileNav && <MobileNavOverlay onClose={()=>setMobileNav(false)}
         items={[
           {icon:<I.Plus />,label:"New Category",fn:()=>{setShowNewCat(true);setMobileNav(false)}},
+          {icon:<I.Sparkle />,label:"AI Assistant",fn:()=>{setShowAi(true);setMobileNav(false)}},
           {icon:<I.Export />,label:"Export",fn:()=>{exportData();setMobileNav(false)}},
           {icon:<I.Import />,label:"Import",fn:()=>{fileRef.current?.click();setMobileNav(false)}},
           {icon:<I.User />,label:"Profile",fn:()=>{onNavigate("profile");setMobileNav(false)}},
@@ -1745,6 +1772,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         itemName={confirmDel?.cat?.name}
         count={confirmDel?.cat?.bookmarks?.length || 0}
       />
+      <AiPanel open={showAi} onClose={()=>setShowAi(false)} categories={categories} />
       {ToastEl}
 
       <style>{`
@@ -1754,6 +1782,412 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:${T.primary}!important}
         .mm-bm-actions:focus-within{opacity:1!important}
       `}</style>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAGE: PRICING
+   ══════════════════════════════════════════════════════════════════════════ */
+function PricingPage({ onNavigate }) {
+  const [annual, setAnnual] = useState(true);
+  const plans = [
+    { id:"free", name:"Free", price:"$0", priceAnnual:"$0", period:"forever", desc:"For casual bookmarkers",
+      features:["Up to 100 bookmarks","5 categories","Tag filtering & search","Export/Import JSON","Basic sort controls"],
+      cta:"Get Started", action:()=>onNavigate("signup") },
+    { id:"pro", name:"Pro", price:"$5/mo", priceAnnual:"$4/mo", period:annual?"billed annually":"billed monthly", desc:"For power users",
+      features:["Unlimited bookmarks","Unlimited categories","Cloud sync & backup","Chrome extension + new tab","AI auto-tagging & summaries","Link preview tooltips","Priority support"],
+      color:T.primary, popular:true, cta:"Start Free Trial", action:()=>onNavigate("signup") },
+    { id:"team", name:"Team", price:"$12/mo", priceAnnual:"$9/mo", period:"per user, "+( annual?"billed annually":"billed monthly"), desc:"For teams & companies",
+      features:["Everything in Pro","Shared workspaces","Team bookmark collections","Admin dashboard & roles","Bio website generator","API access","Dedicated support"],
+      color:T.secondary, cta:"Contact Sales", action:()=>onNavigate("signup") },
+  ];
+
+  const faqs = [
+    { q:"Can I switch plans later?", a:"Yes, you can upgrade or downgrade at any time. Changes take effect immediately, and we'll prorate the difference." },
+    { q:"Is there a free trial for Pro?", a:"Yes — Pro comes with a 14-day free trial, no credit card required. You'll only be charged if you decide to continue." },
+    { q:"What happens to my bookmarks if I downgrade?", a:"Your bookmarks are never deleted. If you exceed the free tier limit, you'll have read-only access until you upgrade or remove some." },
+    { q:"Does the Chrome extension work on other browsers?", a:"We're starting with Chrome and Chromium-based browsers (Edge, Brave, Arc). Firefox and Safari support is planned." },
+    { q:"How does AI auto-tagging work?", a:"When you save a bookmark, our AI analyzes the URL, title, and page content to suggest relevant tags and a category. You can accept, edit, or ignore the suggestions." },
+  ];
+  const [openFaq, setOpenFaq] = useState(null);
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text }}>
+      <Atmosphere />
+      <SkipLink />
+      <nav aria-label="Site navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div onClick={()=>onNavigate("landing")} role="button" tabIndex={0} aria-label="Go to homepage" onKeyDown={e=>{if(e.key==="Enter")onNavigate("landing")}} style={{ cursor:"pointer" }}><Logo /></div>
+          <button onClick={()=>onNavigate("signup")} style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}>Get Started</button>
+        </div>
+      </nav>
+
+      <main id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"60px 20px 80px", position:"relative", zIndex:1 }}>
+        {/* Header */}
+        <div style={{ textAlign:"center", marginBottom:48, animation:"mmSlideUp .5s ease both" }}>
+          <h1 style={{ fontFamily:T.font, fontSize:"clamp(2rem, 4vw, 3rem)", fontWeight:800, letterSpacing:"-0.04em", marginBottom:12 }}>
+            Simple, transparent <span style={{ background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>pricing</span>
+          </h1>
+          <p style={{ color:T.textSec, fontSize:15, maxWidth:440, margin:"0 auto 24px" }}>Start free. Upgrade when you need more power.</p>
+          {/* Annual/Monthly toggle */}
+          <div style={{ display:"inline-flex", alignItems:"center", gap:10, background:T.bgEl, border:`1px solid ${T.border}`, padding:4 }}>
+            {[{label:"Monthly",val:false},{label:"Annual",val:true}].map(o=>(
+              <button key={o.label} onClick={()=>setAnnual(o.val)} style={{
+                ...S.btn, padding:"7px 20px", fontSize:12, fontWeight:700,
+                background:annual===o.val?"#fff":"transparent", color:annual===o.val?T.bg:T.textMuted,
+                transition:"all 0.15s",
+              }}>{o.label} {o.val && <span style={{ fontSize:10, color:annual?T.bg:T.success, fontWeight:800, marginLeft:2 }}>-20%</span>}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Plans grid */}
+        <div className="mm-pricing-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:1, background:T.border, marginBottom:60 }}>
+          {plans.map((p,i)=>(
+            <div key={p.id} style={{
+              background:T.bg, padding:"36px 28px", position:"relative", overflow:"hidden",
+              animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*80}ms both`,
+            }}>
+              {p.popular && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:p.color }} />}
+              {p.popular && <span style={{ position:"absolute", top:12, right:12, fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", background:p.color+"20", color:p.color, padding:"2px 8px", border:`1px solid ${p.color}30` }}>Most popular</span>}
+              {p.color && <div style={{ position:"absolute", top:-40, right:-40, width:120, height:120, borderRadius:"50%", background:p.color, filter:"blur(70px)", opacity:0.08 }} />}
+              <div style={{ fontSize:13, fontWeight:800, color:T.text, letterSpacing:"-0.02em", marginBottom:4, position:"relative" }}>{p.name}</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:4, marginBottom:4, position:"relative" }}>
+                <span style={{ fontSize:36, fontWeight:800, color:p.color||T.text, letterSpacing:"-0.04em", lineHeight:1 }}>{annual?p.priceAnnual:p.price}</span>
+              </div>
+              <div style={{ fontSize:11, color:T.textMuted, marginBottom:20, position:"relative" }}>{p.period}</div>
+              <p style={{ fontSize:13, color:T.textSec, marginBottom:20, lineHeight:1.5, position:"relative" }}>{p.desc}</p>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:24, position:"relative" }}>
+                {p.features.map((f,fi)=>(
+                  <div key={fi} style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:T.textSec }}>
+                    <span style={{ color:p.color||T.success, display:"flex", flexShrink:0 }}><I.Check /></span> {f}
+                  </div>
+                ))}
+              </div>
+              <button onClick={p.action} style={{
+                ...S.btn, width:"100%", padding:"12px", fontSize:14, fontWeight:800, position:"relative",
+                background:p.popular?"#fff":p.color?p.color+"18":"transparent",
+                color:p.popular?T.bg:p.color||T.textSec,
+                border:p.popular?"none":`1px solid ${p.color?p.color+"40":T.border}`,
+                boxShadow:p.popular?"4px 4px 0 rgba(0,0,0,0.4)":"none",
+              }}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)"}}
+              >{p.popular && <I.Crown />} {p.cta}</button>
+            </div>
+          ))}
+        </div>
+
+        {/* FAQ */}
+        <div style={{ maxWidth:700, margin:"0 auto" }}>
+          <h2 style={{ fontFamily:T.font, fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:24, textAlign:"center" }}>Frequently asked questions</h2>
+          {faqs.map((f,i)=>(
+            <div key={i} style={{ borderBottom:`1px solid ${T.border}`, animation:`mmCardSpring 0.4s ease ${i*50}ms both` }}>
+              <button onClick={()=>setOpenFaq(openFaq===i?null:i)} aria-expanded={openFaq===i}
+                style={{ ...S.btn, width:"100%", padding:"16px 0", justifyContent:"space-between", background:"transparent", color:T.text, fontSize:14, fontWeight:700, textAlign:"left" }}>
+                {f.q}
+                <I.Chev style={{ transform:openFaq===i?"rotate(180deg)":"rotate(0)", transition:"transform 0.2s", flexShrink:0, marginLeft:12 }} />
+              </button>
+              <AnimatedCollapse open={openFaq===i}>
+                <p style={{ fontSize:13, color:T.textSec, lineHeight:1.6, paddingBottom:16 }}>{f.a}</p>
+              </AnimatedCollapse>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      <style>{`
+        @media(max-width:768px){.mm-pricing-grid{grid-template-columns:1fr!important}}
+      `}</style>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAGE: NEW TAB PREVIEW (Chrome Extension)
+   ══════════════════════════════════════════════════════════════════════════ */
+function NewTabPage({ onNavigate, categories }) {
+  const [time, setTime] = useState(new Date());
+  const [ntSearch, setNtSearch] = useState("");
+
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const hours = time.getHours().toString().padStart(2,"0");
+  const mins = time.getMinutes().toString().padStart(2,"0");
+  const dateStr = time.toLocaleDateString("en", { weekday:"long", month:"long", day:"numeric" });
+  const greeting = time.getHours() < 12 ? "Good morning" : time.getHours() < 18 ? "Good afternoon" : "Good evening";
+
+  const allBm = categories.flatMap(c => c.bookmarks.map(b => ({...b, catColor: c.color, catName: c.name, catIcon: c.icon})));
+  const pinned = allBm.filter(b => b.pinned);
+  const recent = [...allBm].sort((a,b) => (b.addedAt||0) - (a.addedAt||0)).slice(0, 8);
+  const searchResults = ntSearch ? allBm.filter(b => b.title.toLowerCase().includes(ntSearch.toLowerCase()) || b.url.toLowerCase().includes(ntSearch.toLowerCase())) : [];
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text, position:"relative" }}>
+      <Atmosphere />
+      {/* Back button */}
+      <div style={{ position:"absolute", top:16, left:20, zIndex:10 }}>
+        <button onClick={()=>onNavigate("landing")} style={{ ...S.btn, background:T.bgInput, color:T.textMuted, padding:"6px 14px", border:`1px solid ${T.border}`, fontSize:12 }}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textMuted}}>
+          Back to site
+        </button>
+      </div>
+      <div style={{ position:"absolute", top:16, right:20, zIndex:10 }}>
+        <span style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", background:T.primary+"20", color:T.primary, padding:"4px 10px", border:`1px solid ${T.primary}30`, fontFamily:T.font }}>
+          <I.Chrome /> Extension Preview
+        </span>
+      </div>
+
+      <div style={{ maxWidth:800, margin:"0 auto", padding:"80px 20px 60px", textAlign:"center", position:"relative", zIndex:1 }}>
+        {/* Clock */}
+        <div style={{ animation:"mmSlideUp .5s ease both" }}>
+          <div style={{ fontSize:"clamp(4rem, 12vw, 7rem)", fontWeight:800, letterSpacing:"-0.06em", lineHeight:1, marginBottom:8, background:`linear-gradient(135deg, ${T.text}, ${T.textSec})`, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
+            {hours}<span style={{ opacity:0.4 }}>:</span>{mins}
+          </div>
+          <p style={{ fontSize:15, color:T.textMuted, marginBottom:6 }}>{dateStr}</p>
+          <p style={{ fontSize:17, color:T.textSec, fontWeight:600, marginBottom:32 }}>{greeting}</p>
+        </div>
+
+        {/* Search */}
+        <div style={{ maxWidth:500, margin:"0 auto 40px", animation:"mmSlideUp .5s ease .1s both" }}>
+          <div role="search" style={{ display:"flex", alignItems:"center", gap:8, background:T.bgEl, border:`1px solid ${ntSearch?T.primary+"60":T.border}`, padding:"12px 16px", transition:"border-color 0.2s" }}>
+            <I.Search s={18} />
+            <input value={ntSearch} onChange={e=>setNtSearch(e.target.value)} placeholder="Search your bookmarks…" aria-label="Search bookmarks"
+              style={{ border:"none", outline:"none", fontSize:15, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
+            {ntSearch && <button onClick={()=>setNtSearch("")} style={{ ...S.btn, background:"none", color:T.textMuted, padding:4 }}><I.X /></button>}
+          </div>
+          {/* Search results dropdown */}
+          {ntSearch && searchResults.length > 0 && (
+            <div style={{ background:T.bgEl, border:`1px solid ${T.border}`, borderTop:"none", textAlign:"left", maxHeight:240, overflowY:"auto" }}>
+              {searchResults.slice(0,6).map(b=>(
+                <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", textDecoration:"none", transition:"background 0.1s" }}
+                  onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.03)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <FaviconWithFallback url={b.url} title={b.title} size={16} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}><Highlight text={b.title} query={ntSearch} /></div>
+                    <div style={{ fontSize:11, color:T.textMuted }}>{getDomain(b.url)}</div>
+                  </div>
+                  <span style={{ fontSize:10, color:ACCENTS[b.catColor]?.bg||T.textMuted, fontWeight:700, flexShrink:0 }}>{b.catIcon}</span>
+                </a>
+              ))}
+            </div>
+          )}
+          {ntSearch && searchResults.length === 0 && (
+            <div style={{ background:T.bgEl, border:`1px solid ${T.border}`, borderTop:"none", padding:"16px", textAlign:"center" }}>
+              <span style={{ fontSize:12, color:T.textMuted }}>No bookmarks match "{ntSearch}"</span>
+            </div>
+          )}
+        </div>
+
+        {/* Pinned shortcuts */}
+        {!ntSearch && pinned.length > 0 && (
+          <div style={{ marginBottom:40, animation:"mmSlideUp .5s ease .2s both" }}>
+            <h3 style={{ fontSize:11, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:14 }}>Pinned</h3>
+            <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:12 }}>
+              {pinned.map(b => {
+                const ac = ACCENTS[b.catColor]||ACCENTS[0];
+                return (
+                  <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none", width:80, textAlign:"center", transition:"transform 0.15s" }}
+                    onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+                    <div style={{ width:48, height:48, margin:"0 auto 6px", background:ac.bg+"15", border:`1px solid ${ac.bg}25`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <FaviconWithFallback url={b.url} title={b.title} size={24} />
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:600, color:T.textSec, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b.title}</div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Recent bookmarks */}
+        {!ntSearch && recent.length > 0 && (
+          <div style={{ animation:"mmSlideUp .5s ease .3s both", textAlign:"left" }}>
+            <h3 style={{ fontSize:11, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:14, textAlign:"center" }}>Recently added</h3>
+            <div className="mm-newtab-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10 }}>
+              {recent.map(b => {
+                const ac = ACCENTS[b.catColor]||ACCENTS[0];
+                return (
+                  <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer"
+                    style={{ display:"block", background:T.bgEl, border:`1px solid ${T.border}`, padding:"14px", textDecoration:"none", transition:"all 0.15s", position:"relative", overflow:"hidden" }}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.transform="translateY(-2px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="translateY(0)"}}>
+                    <div style={{ position:"absolute", top:-20, right:-20, width:50, height:50, borderRadius:"50%", background:ac.bg, filter:"blur(30px)", opacity:0.08 }} />
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, position:"relative" }}>
+                      <FaviconWithFallback url={b.url} title={b.title} size={16} />
+                      <span style={{ fontSize:12, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b.title}</span>
+                    </div>
+                    <div style={{ fontSize:10, color:T.textMuted, position:"relative" }}>{getDomain(b.url)}</div>
+                    {b.addedAt && <div style={{ fontSize:9, color:T.textMuted, marginTop:4, position:"relative" }}>{timeAgo(b.addedAt)}</div>}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* CTA */}
+        <div style={{ marginTop:48, animation:"mmSlideUp .5s ease .4s both" }}>
+          <div style={{ background:T.bgEl, border:`1px solid ${T.border}`, padding:28, maxWidth:480, margin:"0 auto" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"center", marginBottom:12 }}>
+              <I.Chrome /><span style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>Get the Chrome Extension</span>
+            </div>
+            <p style={{ fontSize:12, color:T.textMuted, lineHeight:1.5, marginBottom:16, textAlign:"center" }}>Replace your new tab with this view. Access your bookmarks instantly every time you open a tab.</p>
+            <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
+              <button style={{ ...S.btn, background:"#fff", color:T.bg, padding:"10px 20px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}>Install Extension</button>
+              <button onClick={()=>onNavigate("landing")} style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"10px 16px", border:`1px solid ${T.border}`, fontSize:13 }}>Learn More</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`@media(max-width:640px){.mm-newtab-grid{grid-template-columns:repeat(2,1fr)!important}}`}</style>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AI PANEL (used inside Dashboard)
+   ══════════════════════════════════════════════════════════════════════════ */
+function AiPanel({ open, onClose, categories }) {
+  const trapRef = useFocusTrap(open);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([
+    { role:"ai", text:"Hi! I'm your bookmark AI assistant. I can help you auto-tag bookmarks, summarize categories, find duplicates, or discover connections. Try asking me something!" },
+  ]);
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const buildContext = () => {
+    return categories.map(c =>
+      `Category "${c.name}" (${c.icon}, tags: ${c.tags?.join(", ")||"none"}):\n` +
+      c.bookmarks.map(b => `  - "${b.title}" ${b.url} [tags: ${b.tags?.join(", ")||"none"}]${b.pinned?" (pinned)":""}${b.note?` note: ${b.note}`:""}`).join("\n")
+    ).join("\n\n");
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role:"user", text:userMsg }]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: `You are the AI assistant for mark_me, a bookmark manager app. The user has the following bookmarks:\n\n${buildContext()}\n\nHelp the user organize, tag, summarize, and discover insights about their bookmarks. Be concise and helpful. When suggesting tags, format them as comma-separated lowercase words. When summarizing, be brief (2-3 sentences max). If asked to find duplicates or suggest reorganization, analyze the data and give specific actionable suggestions.`,
+          messages: [{ role:"user", content: userMsg }],
+        }),
+      });
+      const data = await res.json();
+      const aiText = data.content?.map(c => c.text || "").join("") || "Sorry, I couldn't process that request.";
+      setMessages(prev => [...prev, { role:"ai", text:aiText }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role:"ai", text:"Connection error. Please try again." }]);
+    }
+    setLoading(false);
+  };
+
+  if (!open) return null;
+
+  const suggestions = [
+    "Suggest tags for all my bookmarks",
+    "Summarize my Dev Tools category",
+    "Find duplicate or similar bookmarks",
+    "Which categories should I reorganize?",
+  ];
+
+  return (
+    <div ref={trapRef} role="dialog" aria-modal="true" aria-label="AI Assistant" style={{
+      position:"fixed", top:0, right:0, bottom:0, width:380, maxWidth:"100vw", zIndex:800,
+      background:T.bgEl, borderLeft:`1px solid ${T.border}`, display:"flex", flexDirection:"column",
+      animation:"mmSlideLeft .25s cubic-bezier(0.32,0.72,0,1)", boxShadow:"-8px 0 32px rgba(0,0,0,0.3)",
+    }}>
+      {/* Header */}
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ width:28, height:28, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <I.Sparkle />
+          </div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>AI Assistant</div>
+            <div style={{ fontSize:10, color:T.textMuted }}>Powered by Claude</div>
+          </div>
+        </div>
+        <button onClick={onClose} aria-label="Close AI panel" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:12 }}>
+        {messages.map((m,i) => (
+          <div key={i} style={{ display:"flex", gap:8, alignItems:m.role==="user"?"flex-end":"flex-start", flexDirection:m.role==="user"?"row-reverse":"row" }}>
+            <div style={{
+              width:24, height:24, flexShrink:0,
+              background:m.role==="ai" ? `linear-gradient(135deg, ${T.primary}, ${T.secondary})` : T.bgInput,
+              border:m.role==="user" ? `1px solid ${T.border}` : "none",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:800, color:"#fff",
+            }}>{m.role==="ai" ? <I.Sparkle /> : "U"}</div>
+            <div style={{
+              maxWidth:"85%", padding:"10px 14px", fontSize:13, lineHeight:1.6, color:T.text, fontFamily:T.font,
+              background:m.role==="ai" ? T.bgPanel : T.primary+"18",
+              border:m.role==="ai" ? `1px solid ${T.border}` : `1px solid ${T.primary}30`,
+              whiteSpace:"pre-wrap", wordBreak:"break-word",
+            }}>{m.text}</div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+            <div style={{ width:24, height:24, flexShrink:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center" }}><I.Sparkle /></div>
+            <div style={{ padding:"12px 16px", background:T.bgPanel, border:`1px solid ${T.border}`, display:"flex", gap:4 }}>
+              {[0,1,2].map(i=><div key={i} style={{ width:6, height:6, background:T.primary, borderRadius:"50%", opacity:0.5, animation:`mmPulse 1s ease ${i*0.15}s infinite` }} />)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick suggestions */}
+      {messages.length <= 1 && !loading && (
+        <div style={{ padding:"0 18px 8px", display:"flex", flexWrap:"wrap", gap:4 }}>
+          {suggestions.map((s,i) => (
+            <button key={i} onClick={()=>{setInput(s);}} style={{
+              ...S.btn, padding:"4px 10px", fontSize:10, fontWeight:600, background:T.primarySubtle, color:T.primary, border:`1px solid ${T.primary}25`, textAlign:"left",
+            }}
+              onMouseEnter={e=>e.currentTarget.style.background=T.primary+"25"} onMouseLeave={e=>e.currentTarget.style.background=T.primarySubtle}
+            >{s}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{ padding:"12px 18px", borderTop:`1px solid ${T.border}`, flexShrink:0 }}>
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={input} onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}}}
+            placeholder="Ask about your bookmarks…" aria-label="AI message input"
+            style={{ ...S.input, flex:1, padding:"10px 14px" }} />
+          <button onClick={sendMessage} disabled={loading||!input.trim()} aria-label="Send message"
+            style={{ ...S.btn, width:40, height:40, padding:0, background:input.trim()?T.primary:T.bgInput, color:input.trim()?"#fff":T.textMuted, flexShrink:0, transition:"all 0.15s" }}>
+            <I.Send />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1797,12 +2231,15 @@ export default function App() {
         @keyframes mmSheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         @keyframes mmSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes mmShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        @keyframes mmPulse{0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1.1)}}
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12)}
         body{background:${T.bg}}
       `}</style>
       <PageTransition pageKey={page}>
         {page === "landing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The landing page encountered an error."><LandingPage onNavigate={navigate} /></ErrorBoundary>}
+        {page === "pricing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The pricing page encountered an error."><PricingPage onNavigate={navigate} /></ErrorBoundary>}
+        {page === "newtab" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The new tab page encountered an error."><NewTabPage onNavigate={navigate} categories={categories} /></ErrorBoundary>}
         {page === "login" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The login form encountered an error."><AuthPage mode="login" onNavigate={navigate} onLogin={login} /></ErrorBoundary>}
         {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} onLogin={login} /></ErrorBoundary>}
         {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
