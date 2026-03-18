@@ -25,35 +25,39 @@ const ACCENTS = [
   { bg: "#14B8A6", glow: "rgba(20,184,166,0.25)" },
 ];
 
+const _now = Date.now();
+const _h = n => _now - n * 3600000;
+const _d = n => _now - n * 86400000;
+
 const DEMO_DATA = [
   { id:"c1", name:"Design Inspiration", color:0, icon:"🎨", tags:["design","ui/ux"], bookmarks:[
-    { id:"b1", title:"Dribbble", url:"https://dribbble.com", tags:["design"], note:"Daily design inspiration", pinned:true },
-    { id:"b2", title:"Behance", url:"https://behance.net", tags:["design"], note:"Portfolio showcase" },
-    { id:"b3", title:"Awwwards", url:"https://awwwards.com", tags:["ui/ux"], note:"Award-winning websites" },
+    { id:"b1", title:"Dribbble", url:"https://dribbble.com", tags:["design"], note:"Daily design inspiration", pinned:true, addedAt:_d(2) },
+    { id:"b2", title:"Behance", url:"https://behance.net", tags:["design"], note:"Portfolio showcase", addedAt:_d(5) },
+    { id:"b3", title:"Awwwards", url:"https://awwwards.com", tags:["ui/ux"], note:"Award-winning websites", addedAt:_d(12) },
   ]},
   { id:"c2", name:"Dev Tools", color:1, icon:"⚡", tags:["dev","tools"], bookmarks:[
-    { id:"b4", title:"GitHub", url:"https://github.com", tags:["dev"], note:"Code hosting", pinned:true },
-    { id:"b5", title:"VS Code Web", url:"https://vscode.dev", tags:["tools"], note:"Browser-based IDE" },
-    { id:"b6", title:"CodePen", url:"https://codepen.io", tags:["dev"], note:"Frontend playground" },
-    { id:"b7", title:"Stack Overflow", url:"https://stackoverflow.com", tags:["dev"], note:"Q&A for devs" },
+    { id:"b4", title:"GitHub", url:"https://github.com", tags:["dev"], note:"Code hosting", pinned:true, addedAt:_h(3) },
+    { id:"b5", title:"VS Code Web", url:"https://vscode.dev", tags:["tools"], note:"Browser-based IDE", addedAt:_d(1) },
+    { id:"b6", title:"CodePen", url:"https://codepen.io", tags:["dev"], note:"Frontend playground", addedAt:_d(7) },
+    { id:"b7", title:"Stack Overflow", url:"https://stackoverflow.com", tags:["dev"], note:"Q&A for devs", addedAt:_d(30) },
   ]},
   { id:"c3", name:"Reading List", color:5, icon:"📚", tags:["articles"], bookmarks:[
-    { id:"b8", title:"Medium", url:"https://medium.com", tags:["articles"], note:"Blog platform" },
-    { id:"b9", title:"Dev.to", url:"https://dev.to", tags:["articles"], note:"Developer community" },
+    { id:"b8", title:"Medium", url:"https://medium.com", tags:["articles"], note:"Blog platform", addedAt:_d(3) },
+    { id:"b9", title:"Dev.to", url:"https://dev.to", tags:["articles"], note:"Developer community", addedAt:_d(14) },
   ]},
   { id:"c4", name:"Productivity", color:2, icon:"🚀", tags:["work","apps"], bookmarks:[
-    { id:"b10", title:"Notion", url:"https://notion.so", tags:["work"], note:"All-in-one workspace", pinned:true },
-    { id:"b11", title:"Linear", url:"https://linear.app", tags:["work"], note:"Issue tracking" },
-    { id:"b12", title:"Figma", url:"https://figma.com", tags:["apps"], note:"Design tool" },
+    { id:"b10", title:"Notion", url:"https://notion.so", tags:["work"], note:"All-in-one workspace", pinned:true, addedAt:_h(1) },
+    { id:"b11", title:"Linear", url:"https://linear.app", tags:["work"], note:"Issue tracking", addedAt:_d(4) },
+    { id:"b12", title:"Figma", url:"https://figma.com", tags:["apps"], note:"Design tool", addedAt:_d(20) },
   ]},
   { id:"c5", name:"Entertainment", color:4, icon:"🎬", tags:["fun","media"], bookmarks:[
-    { id:"b13", title:"YouTube", url:"https://youtube.com", tags:["media"], note:"Video platform" },
-    { id:"b14", title:"Spotify", url:"https://spotify.com", tags:["fun"], note:"Music streaming" },
+    { id:"b13", title:"YouTube", url:"https://youtube.com", tags:["media"], note:"Video platform", addedAt:_d(6) },
+    { id:"b14", title:"Spotify", url:"https://spotify.com", tags:["fun"], note:"Music streaming", addedAt:_d(10) },
   ]},
   { id:"c6", name:"AI & ML", color:6, icon:"🤖", tags:["ai","research"], bookmarks:[
-    { id:"b15", title:"Hugging Face", url:"https://huggingface.co", tags:["ai"], note:"ML models hub", pinned:true },
-    { id:"b16", title:"Papers With Code", url:"https://paperswithcode.com", tags:["research"], note:"ML papers + code" },
-    { id:"b17", title:"Anthropic", url:"https://anthropic.com", tags:["ai"], note:"AI safety" },
+    { id:"b15", title:"Hugging Face", url:"https://huggingface.co", tags:["ai"], note:"ML models hub", pinned:true, addedAt:_h(6) },
+    { id:"b16", title:"Papers With Code", url:"https://paperswithcode.com", tags:["research"], note:"ML papers + code", addedAt:_d(8) },
+    { id:"b17", title:"Anthropic", url:"https://anthropic.com", tags:["ai"], note:"AI safety", addedAt:_d(15) },
   ]},
 ];
 
@@ -61,6 +65,91 @@ const uid = () => `id-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 const getDomain = u => { try { return new URL(u).hostname.replace("www.",""); } catch { return ""; } };
 const getFavicon = u => `https://www.google.com/s2/favicons?domain=${getDomain(u)}&sz=32`;
 const tagColor = t => TAG_COLORS[t.split("").reduce((a,c) => a + c.charCodeAt(0), 0) % TAG_COLORS.length];
+
+/* ── Relative time formatter ── */
+function timeAgo(ts) {
+  if (!ts) return null;
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days/7)}w ago`;
+  if (days < 365) return `${Math.floor(days/30)}mo ago`;
+  return `${Math.floor(days/365)}y ago`;
+}
+
+/* ── Favicon with shimmer loading + initial fallback ── */
+function FaviconWithFallback({ url, title, size = 20 }) {
+  const [state, setState] = useState("loading"); // loading | loaded | error
+  const letter = (title || getDomain(url) || "?")[0].toUpperCase();
+  const hash = (title || "").split("").reduce((a,c) => a + c.charCodeAt(0), 0);
+  const color = TAG_COLORS[hash % TAG_COLORS.length];
+
+  return (
+    <div style={{ width:size, height:size, flexShrink:0, position:"relative", marginTop:2 }}>
+      {/* Shimmer placeholder */}
+      {state === "loading" && (
+        <div aria-hidden="true" style={{ position:"absolute", inset:0, background:`linear-gradient(90deg, ${T.bgInput} 25%, rgba(255,255,255,0.06) 50%, ${T.bgInput} 75%)`, backgroundSize:"200% 100%", animation:"mmShimmer 1.2s ease infinite" }} />
+      )}
+      {/* Fallback initial */}
+      {state === "error" && (
+        <div aria-hidden="true" style={{
+          width:size, height:size, background:color+"25", border:`1px solid ${color}40`,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:size*0.5, fontWeight:800, color, fontFamily:T.font, lineHeight:1,
+        }}>{letter}</div>
+      )}
+      {/* Actual image */}
+      {state !== "error" && (
+        <img src={getFavicon(url)} alt="" width={size} height={size}
+          style={{ opacity:state==="loaded"?1:0, transition:"opacity 0.2s", display:"block" }}
+          onLoad={()=>setState("loaded")} onError={()=>setState("error")} />
+      )}
+    </div>
+  );
+}
+
+/* ── Link Preview Tooltip (desktop hover) ── */
+function LinkPreview({ url, title, children }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ x:0, y:0 });
+  const timer = useRef(null);
+  const domain = getDomain(url);
+
+  const onEnter = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPos({ x: rect.left, y: rect.top - 6 });
+    timer.current = setTimeout(() => setShow(true), 400);
+  };
+  const onLeave = () => { clearTimeout(timer.current); setShow(false); };
+
+  return (
+    <div onMouseEnter={onEnter} onMouseLeave={onLeave} style={{ display:"contents" }}>
+      {children}
+      {show && (
+        <div style={{
+          position:"fixed", left:Math.min(pos.x, window.innerWidth-260), top:pos.y, transform:"translateY(-100%)",
+          background:T.bgPanel, border:`1px solid ${T.border}`, padding:"10px 12px",
+          width:240, boxShadow:"4px 4px 0 rgba(0,0,0,0.4)", zIndex:800,
+          animation:"mmFadeIn .15s ease", pointerEvents:"none",
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+            <img src={getFavicon(url)} alt="" width={14} height={14} />
+            <span style={{ fontSize:11, fontWeight:700, color:T.text, fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{title}</span>
+          </div>
+          <div style={{ fontSize:10, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            <I.Globe /> {domain}
+          </div>
+          <div style={{ fontSize:10, color:T.textMuted, marginTop:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"monospace" }}>{url}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    ICONS
@@ -1080,11 +1169,19 @@ function AuthPage({ mode, onNavigate, onLogin }) {
           </div>
 
           {/* Social auth placeholder */}
-          <button style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:T.textSec, border:`1px solid ${T.border}`, fontSize:13 }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}>
-            <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            Continue with Google
-          </button>
+          {(() => {
+            const [gLoading, setGLoading] = useState(false);
+            return (
+              <button onClick={()=>{setGLoading(true);setTimeout(()=>setGLoading(false),2000)}} disabled={gLoading}
+                style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:gLoading?T.textMuted:T.textSec, border:`1px solid ${T.border}`, fontSize:13, opacity:gLoading?0.7:1, transition:"all 0.2s" }}
+                onMouseEnter={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}} onMouseLeave={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}}>
+                {gLoading
+                  ? <div style={{ width:16, height:16, border:`2px solid ${T.textMuted}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite" }} />
+                  : <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>}
+                {gLoading ? "Connecting..." : "Continue with Google"}
+              </button>
+            );
+          })()}
 
           <p style={{ textAlign:"center", marginTop:24, fontSize:13, color:T.textMuted }}>
             {isLogin ? "Don't have an account? " : "Already have an account? "}
@@ -1255,6 +1352,7 @@ function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin, searchQuery })
   const copy = () => { navigator.clipboard?.writeText(bm.url); setCopied(true); setTimeout(()=>setCopied(false),1500); };
   const ac = ACCENTS[accent]||ACCENTS[0];
   const q = searchQuery || "";
+  const ago = timeAgo(bm.addedAt);
   const actions = [
     {icon:copied?<I.Check/>:<I.Copy/>,fn:copy,label:copied?"URL copied":"Copy URL"},
     {icon:<I.Pin/>,fn:()=>onTogglePin(bm.id),label:bm.pinned?"Unpin bookmark":"Pin bookmark"},
@@ -1264,15 +1362,20 @@ function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin, searchQuery })
   return (
     <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onFocus={()=>setHovered(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setHovered(false)}}
       role="listitem" style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 12px", background:hovered?"rgba(255,255,255,0.03)":"transparent", borderLeft:bm.pinned?`2px solid ${ac.bg}`:"2px solid transparent", transition:"all 0.15s" }}>
-      <img src={getFavicon(bm.url)} alt="" width={20} height={20} style={{ marginTop:2, flexShrink:0 }} onError={e=>e.target.style.display="none"} aria-hidden="true" />
+      <FaviconWithFallback url={bm.url} title={bm.title} />
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:1 }}>
           {bm.pinned && <span style={{ color:ac.bg, display:"flex" }} aria-label="Pinned"><I.Pin /></span>}
-          <a href={bm.url} target="_blank" rel="noopener noreferrer" aria-label={`${bm.title} — opens in new tab`} style={{ fontSize:13, fontWeight:700, color:T.text, textDecoration:"none", fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", letterSpacing:"-0.01em", transition:"color 0.15s" }}
-            onMouseEnter={e=>e.target.style.color=ac.bg} onMouseLeave={e=>e.target.style.color=T.text}><Highlight text={bm.title} query={q} /></a>
+          <LinkPreview url={bm.url} title={bm.title}>
+            <a href={bm.url} target="_blank" rel="noopener noreferrer" aria-label={`${bm.title} — opens in new tab`} style={{ fontSize:13, fontWeight:700, color:T.text, textDecoration:"none", fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", letterSpacing:"-0.01em", transition:"color 0.15s" }}
+              onMouseEnter={e=>e.target.style.color=ac.bg} onMouseLeave={e=>e.target.style.color=T.text}><Highlight text={bm.title} query={q} /></a>
+          </LinkPreview>
           <span style={{ opacity:0.3, display:"flex" }} aria-hidden="true"><I.External /></span>
         </div>
-        <div style={{ fontSize:11, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, marginBottom:bm.tags?.length?5:0 }} aria-label={`Domain: ${getDomain(bm.url)}`}><I.Globe /> <Highlight text={getDomain(bm.url)} query={q} /></div>
+        <div style={{ fontSize:11, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, marginBottom:bm.note||bm.tags?.length?5:0 }}>
+          <I.Globe /> <Highlight text={getDomain(bm.url)} query={q} />
+          {ago && <><span style={{ opacity:0.3 }}>·</span><span style={{ display:"flex", alignItems:"center", gap:3 }}><I.Clock /> {ago}</span></>}
+        </div>
         {bm.note && <div style={{ fontSize:11, color:T.textSec, marginBottom:5 }}><Highlight text={bm.note} query={q} /></div>}
         {bm.tags?.length>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:3 }} role="list" aria-label="Bookmark tags">{bm.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
       </div>
@@ -1311,11 +1414,12 @@ function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
   );
 }
 
-function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags, searchQuery }) {
+const CatCard = React.memo(function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags, searchQuery }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
   const isMobile = useIsMobile();
   const q = searchQuery || "";
+  const isEmpty = cat.bookmarks.length === 0;
   return (
     <article aria-label={`${cat.name} category — ${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="6px 6px 0 rgba(0,0,0,0.4)"}}
@@ -1358,6 +1462,18 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags, searchQ
       </div>
       <AnimatedCollapse open={exp}>
         <div style={{ borderTop:`1px solid ${T.border}` }} role="list" aria-label={`Bookmarks in ${cat.name}`}>
+        {isEmpty ? (
+          <div style={{ padding:"24px 18px", textAlign:"center" }}>
+            <div style={{ width:48, height:48, margin:"0 auto 10px", background:ac.bg+"12", border:`1px solid ${ac.bg}25`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <I.BookmarkSm />
+              <span style={{ position:"absolute", color:ac.bg, opacity:0.5, fontSize:18 }}>+</span>
+            </div>
+            <p style={{ fontSize:12, fontWeight:600, color:T.textSec, marginBottom:4, fontFamily:T.font }}>No bookmarks yet</p>
+            <p style={{ fontSize:11, color:T.textMuted, marginBottom:12, fontFamily:T.font }}>Save your first link to this collection</p>
+            <button onClick={()=>setAddBm(true)} style={{ ...S.btn, background:ac.bg+"18", color:ac.bg, padding:"7px 16px", fontSize:12, fontWeight:700, border:`1px solid ${ac.bg}30` }}
+              onMouseEnter={e=>{e.currentTarget.style.background=ac.bg+"30"}} onMouseLeave={e=>{e.currentTarget.style.background=ac.bg+"18"}}><I.Plus /> Add Bookmark</button>
+          </div>
+        ) : (<>
         {sorted.map((bm,bi)=>{
           const bmRow = <BookmarkRow bm={bm} accent={cat.color} searchQuery={q} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} />;
           return (
@@ -1370,13 +1486,14 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags, searchQ
         })}
         <button onClick={()=>setAddBm(true)} aria-label={`Add bookmark to ${cat.name}`} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12 }}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color=ac.bg}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMuted}}><I.Plus /> Add Bookmark</button>
+        </>)}
         </div>
       </AnimatedCollapse>
-      <BmModal open={addBm} onClose={()=>setAddBm(false)} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:[...cat.bookmarks,{...bm,id:uid()}]});setAddBm(false)}} allTags={allTags} />
+      <BmModal open={addBm} onClose={()=>setAddBm(false)} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:[...cat.bookmarks,{...bm,id:uid(),addedAt:Date.now()}]});setAddBm(false)}} allTags={allTags} />
       <BmModal open={!!editBm} onClose={()=>setEditBm(null)} bm={editBm} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===bm.id?bm:b)});setEditBm(null)}} allTags={allTags} />
     </article>
   );
-}
+});
 
 function CatModal({ open, onClose, onSave, cat }) {
   const [f,setF]=useState({name:"",icon:"📁",color:0,tags:[]}); const [ti,setTi]=useState("");
@@ -1510,7 +1627,9 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
             <button onClick={exportData} title="Export" aria-label="Export bookmarks as JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Export /></button>
             <button onClick={()=>fileRef.current?.click()} title="Import" aria-label="Import bookmarks from JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Import /></button>
             <input ref={fileRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} aria-hidden="true" tabIndex={-1} />
-            <button onClick={()=>setShowNewCat(true)} aria-label="Create new category" style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
+            <button onClick={()=>setShowNewCat(true)} aria-label="Create new category" style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)", transition:"all 0.15s cubic-bezier(0.4,0,0.2,1)" }}
+              onMouseDown={e=>{e.currentTarget.style.transform="scale(0.95)";e.currentTarget.style.boxShadow="1px 1px 0 rgba(0,0,0,0.2)"}}
+              onMouseUp={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}><I.Plus /> New</button>
             {/* Profile button */}
             <button onClick={()=>onNavigate("profile")} aria-label={`Profile — ${user.name}`} style={{ ...S.btn, width:32, height:32, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, color:"#fff", fontSize:12, fontWeight:800, flexShrink:0 }}
@@ -1604,6 +1723,18 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         </PullToRefresh>
       </main>
 
+      {/* Mobile FAB */}
+      <button className="mm-fab" onClick={()=>setShowNewCat(true)} aria-label="Create new category"
+        style={{
+          ...S.btn, display:"none", position:"fixed", bottom:24, right:20, zIndex:90,
+          width:52, height:52, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`,
+          color:"#fff", boxShadow:`0 4px 20px ${T.primary}50, 4px 4px 0 rgba(0,0,0,0.3)`,
+          transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)",
+        }}
+        onTouchStart={e=>e.currentTarget.style.transform="scale(0.9)"}
+        onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}
+      ><I.Plus /></button>
+
       <CatModal open={showNewCat} onClose={()=>setShowNewCat(false)} onSave={saveCat} />
       <CatModal open={!!editCat} onClose={()=>setEditCat(null)} onSave={saveCat} cat={editCat} />
       <ConfirmDialog
@@ -1618,7 +1749,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
 
       <style>{`
         @media(max-width:860px){.mm-grid{column-count:2!important}.mm-stats{grid-template-columns:repeat(2,1fr)!important}}
-        @media(max-width:640px){.mm-grid{column-count:1!important}.mm-desk{display:none!important}.mm-mob-btn{display:flex!important}.mm-mob-search{display:block!important}.mm-stats{grid-template-columns:repeat(2,1fr)!important}}
+        @media(max-width:640px){.mm-grid{column-count:1!important}.mm-desk{display:none!important}.mm-mob-btn{display:flex!important}.mm-mob-search{display:block!important}.mm-stats{grid-template-columns:repeat(2,1fr)!important}.mm-fab{display:flex!important}}
         *:focus-visible{outline:2px solid ${T.primary};outline-offset:2px}
         input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:${T.primary}!important}
         .mm-bm-actions:focus-within{opacity:1!important}
@@ -1665,6 +1796,7 @@ export default function App() {
         @keyframes mmStatPulse{0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
         @keyframes mmSheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         @keyframes mmSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes mmShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12)}
         body{background:${T.bg}}
