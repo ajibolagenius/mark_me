@@ -187,12 +187,143 @@ function Tag({ tag, small, removable, onRemove, onClick, active }) {
   );
 }
 
-/* Toast hook */
-function useToast() {
+/* Toast hook — supports simple messages + undo actions */
+function useUndoToast() {
   const [toast, setToast] = useState(null);
-  const flash = msg => { setToast(msg); setTimeout(() => setToast(null), 2200); };
-  const ToastEl = toast ? <div role="status" aria-live="polite" aria-atomic="true" style={{ position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)", background:"#fff", color:T.bg, padding:"10px 22px", fontSize:13, fontWeight:700, fontFamily:T.font, boxShadow:"4px 4px 0 rgba(0,0,0,0.4)", animation:"mmSlideUp .2s ease", zIndex:2000 }}>{toast}</div> : null;
-  return { flash, ToastEl };
+  const timerRef = useRef(null);
+  const countRef = useRef(null);
+
+  const clear = useCallback(() => {
+    clearTimeout(timerRef.current);
+    clearInterval(countRef.current);
+    setToast(null);
+  }, []);
+
+  const flash = useCallback((msg) => {
+    clear();
+    setToast({ msg });
+    timerRef.current = setTimeout(clear, 2200);
+  }, [clear]);
+
+  const flashUndo = useCallback((msg, onUndo, duration = 5000) => {
+    clear();
+    const end = Date.now() + duration;
+    setToast({ msg, onUndo, remaining: duration });
+    countRef.current = setInterval(() => {
+      const left = Math.max(0, end - Date.now());
+      if (left <= 0) { clear(); return; }
+      setToast(prev => prev ? { ...prev, remaining: left } : null);
+    }, 50);
+    timerRef.current = setTimeout(clear, duration);
+  }, [clear]);
+
+  const handleUndo = useCallback(() => {
+    if (toast?.onUndo) toast.onUndo();
+    clear();
+  }, [toast, clear]);
+
+  const secs = toast?.remaining ? Math.ceil(toast.remaining / 1000) : 0;
+  const pct = toast?.remaining ? (toast.remaining / 5000) * 100 : 0;
+
+  const ToastEl = toast ? (
+    <div role="status" aria-live="assertive" aria-atomic="true" style={{
+      position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)", zIndex:2000,
+      background:T.bgEl, border:`1px solid ${T.border}`, boxShadow:"6px 6px 0 rgba(0,0,0,0.5)",
+      animation:"mmSlideUp .2s ease", fontFamily:T.font, minWidth:260, maxWidth:"90vw", overflow:"hidden",
+    }}>
+      {toast.onUndo && (
+        <div style={{ height:3, background:T.error, width:`${pct}%`, transition:"width 0.1s linear" }} aria-hidden="true" />
+      )}
+      <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:12, justifyContent:"space-between" }}>
+        <span style={{ fontSize:13, fontWeight:600, color:T.text, display:"flex", alignItems:"center", gap:6 }}>
+          {toast.onUndo && <span aria-hidden="true" style={{ color:T.error, display:"flex" }}><I.Trash /></span>}
+          {toast.msg}
+        </span>
+        {toast.onUndo ? (
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+            <span style={{ fontSize:11, color:T.textMuted, fontVariantNumeric:"tabular-nums", minWidth:16, textAlign:"center" }}>{secs}s</span>
+            <button onClick={handleUndo} aria-label="Undo delete" style={{
+              ...S.btn, background:T.primary, color:"#fff", padding:"5px 12px", fontSize:12, fontWeight:800,
+            }}
+              onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}
+            >Undo</button>
+            <button onClick={clear} aria-label="Dismiss" style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:4 }}
+              onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}
+            ><I.X s={12} /></button>
+          </div>
+        ) : (
+          <span style={{ color:T.success, display:"flex" }}><I.Check /></span>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  return { flash, flashUndo, ToastEl };
+}
+
+/* ── Confirm Dialog ── */
+function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count }) {
+  const trapRef = useFocusTrap(open);
+  const titleId = useRef(`confirm-${Math.random().toString(36).slice(2,6)}`).current;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={`${titleId}-desc`} ref={trapRef}
+      style={{ position:"fixed", inset:0, zIndex:1100, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.65)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:T.bgEl, border:`1px solid ${T.error}30`, width:400, maxWidth:"100%",
+        boxShadow:`8px 8px 0 rgba(0,0,0,0.5)`, animation:"mmSlideUp .2s ease", overflow:"hidden",
+      }}>
+        {/* Red top accent */}
+        <div style={{ height:3, background:T.error }} aria-hidden="true" />
+        <div style={{ padding:"24px 24px 20px" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:16 }}>
+            <div style={{
+              width:40, height:40, background:T.error+"15", border:`1px solid ${T.error}30`,
+              display:"flex", alignItems:"center", justifyContent:"center", color:T.error, flexShrink:0,
+            }}><I.Trash /></div>
+            <div>
+              <h3 id={titleId} style={{ fontFamily:T.font, fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-0.02em", margin:"0 0 6px" }}>
+                {title || "Delete forever?"}
+              </h3>
+              <p id={`${titleId}-desc`} style={{ fontSize:13, color:T.textSec, lineHeight:1.5, margin:0 }}>
+                {message || <>Are you sure you want to delete <strong style={{ color:T.text }}>{itemName}</strong>?</>}
+              </p>
+              {count > 0 && (
+                <p style={{ fontSize:12, color:T.warning, marginTop:6, display:"flex", alignItems:"center", gap:4 }}>
+                  <I.Zap /> This will also remove {count} bookmark{count !== 1 ? "s" : ""} inside
+                </p>
+              )}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+            <button onClick={onClose} aria-label="Cancel" style={{
+              ...S.btn, background:"transparent", color:T.textSec, padding:"9px 18px", border:`1px solid ${T.border}`, fontSize:13,
+            }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}
+            >Cancel</button>
+            <button onClick={onConfirm} aria-label={`Confirm delete ${itemName || ""}`} style={{
+              ...S.btn, background:T.error, color:"#fff", padding:"9px 18px", fontSize:13, fontWeight:800,
+              boxShadow:"2px 2px 0 rgba(0,0,0,0.3)",
+            }}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}
+            >Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ── Animated Collapse (smooth expand/collapse) ── */
@@ -603,7 +734,7 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [saved, setSaved] = useState(false);
-  const { flash, ToastEl } = useToast();
+  const { flash, ToastEl } = useUndoToast();
 
   const save = () => {
     onUpdate({ ...user, name, email });
@@ -807,7 +938,7 @@ function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
   );
 }
 
-function CatCard({ cat, onUpdate, onDelete, onEdit, allTags }) {
+function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
   return (
@@ -827,7 +958,7 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, allTags }) {
           </div>
           <div style={{ display:"flex", gap:2 }} role="toolbar" aria-label={`${cat.name} actions`}>
             <button onClick={()=>onEdit(cat)} aria-label={`Edit ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Edit /></button>
-            <button onClick={()=>onDelete(cat.id)} aria-label={`Delete ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.error} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Trash /></button>
+            <button onClick={()=>onDelete(cat)} aria-label={`Delete ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.error} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Trash /></button>
             <button onClick={()=>setExp(!exp)} aria-expanded={exp} aria-label={exp ? `Collapse ${cat.name}` : `Expand ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }}><I.Chev style={{ transform:exp?"rotate(180deg)":"rotate(0)", transition:"transform 0.2s" }} /></button>
           </div>
         </div>
@@ -835,14 +966,14 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, allTags }) {
       </div>
       <AnimatedCollapse open={exp}>
         <div style={{ borderTop:`1px solid ${T.border}` }} role="list" aria-label={`Bookmarks in ${cat.name}`}>
-        {sorted.map((bm,bi)=><div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}><BookmarkRow bm={bm} accent={cat.color} onEdit={setEditBm} onDelete={id=>onUpdate({...cat,bookmarks:cat.bookmarks.filter(b=>b.id!==id)})} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} /></div>)}
+        {sorted.map((bm,bi)=><div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}><BookmarkRow bm={bm} accent={cat.color} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} /></div>)}
         <button onClick={()=>setAddBm(true)} aria-label={`Add bookmark to ${cat.name}`} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12 }}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color=ac.bg}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMuted}}><I.Plus /> Add Bookmark</button>
         </div>
       </AnimatedCollapse>
       <BmModal open={addBm} onClose={()=>setAddBm(false)} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:[...cat.bookmarks,{...bm,id:uid()}]});setAddBm(false)}} allTags={allTags} />
       <BmModal open={!!editBm} onClose={()=>setEditBm(null)} bm={editBm} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===bm.id?bm:b)});setEditBm(null)}} allTags={allTags} />
-    </div>
+    </article>
   );
 }
 
@@ -905,7 +1036,8 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
   const [search,setSearch]=useState(""); const [filterTag,setFilterTag]=useState(null);
   const [showNewCat,setShowNewCat]=useState(false); const [editCat,setEditCat]=useState(null);
   const [mobileNav,setMobileNav]=useState(false);
-  const fileRef=useRef(null); const { flash, ToastEl } = useToast();
+  const [confirmDel, setConfirmDel] = useState(null); // { cat } or null
+  const fileRef=useRef(null); const { flash, flashUndo, ToastEl } = useUndoToast();
 
   const allTags = useMemo(()=>[...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))],[categories]);
   const filtered = useMemo(()=>categories.map(cat=>{
@@ -916,6 +1048,33 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
   const saveCat=cat=>{if(categories.find(c=>c.id===cat.id))setCategories(categories.map(c=>c.id===cat.id?cat:c));else setCategories([...categories,cat]);setShowNewCat(false);setEditCat(null)};
   const exportData=()=>{const b=new Blob([JSON.stringify(categories,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="markme_bookmarks.json";a.click();URL.revokeObjectURL(u);flash("Exported ✓")};
   const importData=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d)){setCategories(d);flash("Imported ✓")}}catch{flash("Invalid file")}};r.readAsText(file);e.target.value=""};
+
+  // ── Category delete: confirm dialog → soft delete → undo toast ──
+  const requestDeleteCat = cat => setConfirmDel({ cat });
+  const confirmDeleteCat = () => {
+    const cat = confirmDel?.cat;
+    if (!cat) return;
+    const snapshot = [...categories];
+    setCategories(categories.filter(c => c.id !== cat.id));
+    setConfirmDel(null);
+    flashUndo(
+      `"${cat.name}" deleted`,
+      () => setCategories(snapshot)
+    );
+  };
+
+  // ── Bookmark delete: instant soft delete → undo toast ──
+  const deleteBm = (catId, bmId, bmTitle) => {
+    const snapshot = [...categories];
+    setCategories(categories.map(c =>
+      c.id === catId ? { ...c, bookmarks: c.bookmarks.filter(b => b.id !== bmId) } : c
+    ));
+    flashUndo(
+      `"${bmTitle}" removed`,
+      () => setCategories(snapshot)
+    );
+  };
+
   const totalBm=categories.reduce((a,c)=>a+c.bookmarks.length,0);
   const totalPinned=categories.reduce((a,c)=>a+c.bookmarks.filter(b=>b.pinned).length,0);
   const stats=[{label:"CATEGORIES",val:categories.length,color:T.primary},{label:"BOOKMARKS",val:totalBm,color:T.secondary},{label:"PINNED",val:totalPinned,color:T.warning},{label:"TAGS",val:allTags.length,color:T.success}];
@@ -984,7 +1143,11 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         <div className="mm-grid" style={{ columnCount:3, columnGap:14 }}>
           {filtered.map((cat,i)=>(
             <div key={cat.id} style={{ breakInside:"avoid", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${80 + i*60}ms both` }}>
-              <CatCard cat={cat} allTags={allTags} onUpdate={c=>setCategories(categories.map(x=>x.id===c.id?c:x))} onDelete={id=>{setCategories(categories.filter(c=>c.id!==id));flash("Deleted")}} onEdit={c=>setEditCat(c)} />
+              <CatCard cat={cat} allTags={allTags}
+                onUpdate={c=>setCategories(categories.map(x=>x.id===c.id?c:x))}
+                onDelete={requestDeleteCat}
+                onDeleteBm={deleteBm}
+                onEdit={c=>setEditCat(c)} />
             </div>
           ))}
         </div>
@@ -994,6 +1157,14 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
 
       <CatModal open={showNewCat} onClose={()=>setShowNewCat(false)} onSave={saveCat} />
       <CatModal open={!!editCat} onClose={()=>setEditCat(null)} onSave={saveCat} cat={editCat} />
+      <ConfirmDialog
+        open={!!confirmDel}
+        onClose={()=>setConfirmDel(null)}
+        onConfirm={confirmDeleteCat}
+        title={`Delete "${confirmDel?.cat?.name}"?`}
+        itemName={confirmDel?.cat?.name}
+        count={confirmDel?.cat?.bookmarks?.length || 0}
+      />
       {ToastEl}
 
       <style>{`
