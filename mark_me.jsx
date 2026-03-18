@@ -1118,10 +1118,16 @@ function LandingPage({ onNavigate }) {
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: AUTH (Login / Signup)
    ══════════════════════════════════════════════════════════════════════════ */
+/* Mock user accounts for testing */
+const MOCK_USERS = {
+  "demo@markme.io": { password:"mark_me1", name:"Ajibola Genius", plan:"pro", joinedAt:"2025-11-14T00:00:00.000Z" },
+  "free@markme.io": { password:"test123", name:"Free Tester", plan:"free", joinedAt:"2026-02-01T00:00:00.000Z" },
+};
+
 function AuthPage({ mode, onNavigate, onLogin }) {
   const isLogin = mode === "login";
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
+  const [email, setEmail] = useState(isLogin ? "demo@markme.io" : "");
+  const [pass, setPass] = useState(isLogin ? "mark_me1" : "");
   const [name, setName] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
@@ -1136,7 +1142,18 @@ function AuthPage({ mode, onNavigate, onLogin }) {
     if (!isLogin && !name.trim()) { setError("Name is required"); return; }
     setLoading(true);
     setTimeout(() => {
-      onLogin({ name: name || email.split("@")[0], email, avatar: null, plan: "free", joinedAt: new Date().toISOString() });
+      if (isLogin) {
+        const mock = MOCK_USERS[email.toLowerCase()];
+        if (mock && mock.password === pass) {
+          onLogin({ name:mock.name, email, avatar:null, plan:mock.plan, joinedAt:mock.joinedAt });
+        } else if (mock) {
+          setError("Incorrect password"); setLoading(false); return;
+        } else {
+          onLogin({ name:email.split("@")[0], email, avatar:null, plan:"free", joinedAt:new Date().toISOString() });
+        }
+      } else {
+        onLogin({ name:name||email.split("@")[0], email, avatar:null, plan:"free", joinedAt:new Date().toISOString() });
+      }
       setLoading(false);
     }, 800);
   };
@@ -1164,6 +1181,24 @@ function AuthPage({ mode, onNavigate, onLogin }) {
           </div>
 
           <form onSubmit={submit} aria-label={isLogin ? "Sign in form" : "Sign up form"}>
+            {isLogin && (
+              <div style={{ background:T.secondarySubtle, border:`1px solid ${T.secondary}30`, padding:"12px 14px", marginBottom:18 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:T.secondary, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
+                  <I.Zap /> Demo credentials
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                  {Object.entries(MOCK_USERS).map(([em,u])=>(
+                    <button type="button" key={em} onClick={()=>{setEmail(em);setPass(u.password);setError("")}}
+                      style={{ ...S.btn, padding:"8px 10px", background:T.bgInput, border:`1px solid ${T.border}`, justifyContent:"flex-start", textAlign:"left", flexDirection:"column", alignItems:"flex-start", gap:2 }}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=T.secondary+"60"}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border}}>
+                      <span style={{ fontSize:11, fontWeight:700, color:T.text }}>{u.name}</span>
+                      <span style={{ fontSize:10, color:T.textMuted, fontFamily:"monospace" }}>{em}</span>
+                      <span style={{ fontSize:9, fontWeight:700, color:u.plan==="pro"?T.primary:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginTop:1 }}>{u.plan} plan</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {!isLogin && (
               <Field label="Full Name" placeholder="Your name" icon={<I.User />} value={name} onChange={e=>setName(e.target.value)} />
             )}
