@@ -129,13 +129,24 @@ const Logo = ({ size = 28 }) => (
 
 /* Modal */
 function Modal({ open, onClose, title, children, wide }) {
+  const trapRef = useFocusTrap(open);
+  const titleId = useRef(`modal-title-${Math.random().toString(36).slice(2,6)}`).current;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }} onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
+      style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{ background:T.bgEl, border:`1px solid ${T.border}`, padding:"24px 28px", width:wide?520:420, maxWidth:"100%", maxHeight:"85vh", overflowY:"auto", boxShadow:"8px 8px 0 rgba(0,0,0,0.5)", animation:"mmSlideUp .2s ease" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <h2 style={{ fontFamily:T.font, fontSize:18, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
-          <button onClick={onClose} style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
+          <h2 id={titleId} style={{ fontFamily:T.font, fontSize:18, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
+          <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
         </div>
         {children}
       </div>
@@ -144,15 +155,17 @@ function Modal({ open, onClose, title, children, wide }) {
 }
 
 /* Field */
-function Field({ label, type = "text", icon, rightIcon, onRightClick, ...props }) {
+function Field({ label, type = "text", icon, rightIcon, onRightClick, id: propId, ...props }) {
+  const autoId = useRef(`field-${Math.random().toString(36).slice(2,7)}`).current;
+  const fieldId = propId || autoId;
   return (
     <div style={{ marginBottom:16 }}>
-      {label && <label style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:6, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</label>}
+      {label && <label htmlFor={fieldId} style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:6, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</label>}
       <div style={{ position:"relative" }}>
-        {icon && <div style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:T.textMuted, display:"flex" }}>{icon}</div>}
-        <input type={type} {...props} style={{ ...S.input, paddingLeft: icon ? 38 : 14, paddingRight: rightIcon ? 38 : 14, ...(props.style||{}) }}
+        {icon && <div style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:T.textMuted, display:"flex" }} aria-hidden="true">{icon}</div>}
+        <input id={fieldId} type={type} aria-label={label || props.placeholder} {...props} style={{ ...S.input, paddingLeft: icon ? 38 : 14, paddingRight: rightIcon ? 38 : 14, ...(props.style||{}) }}
           onFocus={e=>e.target.style.borderColor=T.primary} onBlur={e=>e.target.style.borderColor=T.border} />
-        {rightIcon && <button onClick={onRightClick} type="button" style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:T.textMuted, cursor:"pointer", display:"flex", padding:4 }}>{rightIcon}</button>}
+        {rightIcon && <button onClick={onRightClick} type="button" aria-label={type==="password"?"Show password":"Toggle visibility"} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:T.textMuted, cursor:"pointer", display:"flex", padding:4 }}>{rightIcon}</button>}
       </div>
     </div>
   );
@@ -161,9 +174,15 @@ function Field({ label, type = "text", icon, rightIcon, onRightClick, ...props }
 /* Tag */
 function Tag({ tag, small, removable, onRemove, onClick, active }) {
   const c = tagColor(tag);
+  const handleKey = e => { if (onClick && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(); } };
   return (
-    <span onClick={onClick} style={{ display:"inline-flex", alignItems:"center", gap:3, padding:small?"2px 8px":"3px 10px", fontSize:small?10:11, fontWeight:700, letterSpacing:"0.02em", textTransform:"uppercase", background:active?c:c+"20", color:active?T.bg:c, cursor:onClick?"pointer":"default", fontFamily:T.font, transition:"all 0.15s", whiteSpace:"nowrap", border:`1px solid ${active?c:c+"30"}` }}>
-      {tag}{removable && <span onClick={e=>{e.stopPropagation();onRemove?.();}} style={{ cursor:"pointer", marginLeft:2, opacity:0.7, fontSize:13, lineHeight:1 }}>&times;</span>}
+    <span onClick={onClick} onKeyDown={handleKey} role={onClick?"button":undefined} tabIndex={onClick?0:undefined}
+      aria-pressed={onClick ? (active ? "true" : "false") : undefined}
+      aria-label={onClick ? `Filter by ${tag}${active ? " (active)" : ""}` : undefined}
+      style={{ display:"inline-flex", alignItems:"center", gap:3, padding:small?"2px 8px":"3px 10px", fontSize:small?10:11, fontWeight:700, letterSpacing:"0.02em", textTransform:"uppercase", background:active?c:c+"20", color:active?T.bg:c, cursor:onClick?"pointer":"default", fontFamily:T.font, transition:"all 0.15s", whiteSpace:"nowrap", border:`1px solid ${active?c:c+"30"}`, outline:"none" }}>
+      {tag}{removable && <span onClick={e=>{e.stopPropagation();onRemove?.();}} role="button" tabIndex={0} aria-label={`Remove tag ${tag}`}
+        onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();onRemove?.();}}}
+        style={{ cursor:"pointer", marginLeft:2, opacity:0.7, fontSize:13, lineHeight:1 }}>&times;</span>}
     </span>
   );
 }
@@ -172,7 +191,7 @@ function Tag({ tag, small, removable, onRemove, onClick, active }) {
 function useToast() {
   const [toast, setToast] = useState(null);
   const flash = msg => { setToast(msg); setTimeout(() => setToast(null), 2200); };
-  const ToastEl = toast ? <div style={{ position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)", background:"#fff", color:T.bg, padding:"10px 22px", fontSize:13, fontWeight:700, fontFamily:T.font, boxShadow:"4px 4px 0 rgba(0,0,0,0.4)", animation:"mmSlideUp .2s ease", zIndex:2000 }}>{toast}</div> : null;
+  const ToastEl = toast ? <div role="status" aria-live="polite" aria-atomic="true" style={{ position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)", background:"#fff", color:T.bg, padding:"10px 22px", fontSize:13, fontWeight:700, fontFamily:T.font, boxShadow:"4px 4px 0 rgba(0,0,0,0.4)", animation:"mmSlideUp .2s ease", zIndex:2000 }}>{toast}</div> : null;
   return { flash, ToastEl };
 }
 
@@ -277,6 +296,63 @@ function useStagger(count, baseDelay = 40, initialDelay = 60) {
   });
 }
 
+/* ── Focus Trap Hook (for modals & overlays) ── */
+function useFocusTrap(active) {
+  const trapRef = useRef(null);
+  const prevFocus = useRef(null);
+
+  useEffect(() => {
+    if (!active) return;
+    prevFocus.current = document.activeElement;
+    const el = trapRef.current;
+    if (!el) return;
+
+    const focusable = () => el.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+
+    const timer = setTimeout(() => {
+      const nodes = focusable();
+      if (nodes.length) nodes[0].focus();
+    }, 50);
+
+    const handleKey = e => {
+      if (e.key !== "Tab") return;
+      const nodes = focusable();
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+
+    el.addEventListener("keydown", handleKey);
+    return () => {
+      clearTimeout(timer);
+      el.removeEventListener("keydown", handleKey);
+      if (prevFocus.current && prevFocus.current.focus) {
+        try { prevFocus.current.focus(); } catch {}
+      }
+    };
+  }, [active]);
+
+  return trapRef;
+}
+
+/* ── Skip to content link (screen reader shortcut) ── */
+const SkipLink = () => (
+  <a href="#main-content" style={{
+    position:"absolute", top:-40, left:0, background:T.primary, color:"#fff",
+    padding:"8px 16px", zIndex:9999, fontSize:13, fontWeight:700, fontFamily:T.font,
+    transition:"top 0.2s", textDecoration:"none",
+  }} onFocus={e=>e.currentTarget.style.top="0"} onBlur={e=>e.currentTarget.style.top="-40px"}>
+    Skip to content
+  </a>
+);
+
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: LANDING
    ══════════════════════════════════════════════════════════════════════════ */
@@ -300,9 +376,10 @@ function LandingPage({ onNavigate }) {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text }}>
       <Atmosphere />
+      <SkipLink />
 
       {/* Nav */}
-      <nav style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
+      <nav aria-label="Site navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <Logo />
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -315,7 +392,7 @@ function LandingPage({ onNavigate }) {
       </nav>
 
       {/* Hero */}
-      <section style={{ maxWidth:1100, margin:"0 auto", padding:"80px 20px 60px", position:"relative", zIndex:1, textAlign:"center" }}>
+      <section id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"80px 20px 60px", position:"relative", zIndex:1, textAlign:"center" }}>
         <div style={{ animation:"mmSlideUp .5s ease both" }}>
           <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:T.primarySubtle, border:`1px solid ${T.primary}30`, padding:"4px 14px", marginBottom:24, fontSize:11, fontWeight:700, color:T.primary, textTransform:"uppercase", letterSpacing:"0.04em" }}>
             <I.Zap /> Now in public beta
@@ -342,7 +419,7 @@ function LandingPage({ onNavigate }) {
         <div style={{ marginTop:60, background:T.bgEl, border:`1px solid ${T.border}`, padding:3, boxShadow:"8px 8px 0 rgba(0,0,0,0.4)", position:"relative", animation:"mmCardSpring .6s cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both", overflow:"hidden" }}>
           <div style={{ position:"absolute", top:-30, left:"20%", width:200, height:200, borderRadius:"50%", background:T.primary, filter:"blur(80px)", opacity:0.08 }} />
           <div style={{ position:"absolute", bottom:-30, right:"20%", width:180, height:180, borderRadius:"50%", background:T.secondary, filter:"blur(70px)", opacity:0.06 }} />
-          <div style={{ background:T.bgPanel, padding:"12px 16px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ background:T.bgPanel, padding:"12px 16px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:8 }} aria-hidden="true">
             <div style={{ display:"flex", gap:5 }}>{[T.error,"#F59E0B",T.success].map((c,i)=><div key={i} style={{ width:8, height:8, borderRadius:"50%", background:c, opacity:0.6 }} />)}</div>
             <div style={{ flex:1, background:T.bgInput, border:`1px solid ${T.border}`, padding:"4px 10px", fontSize:11, color:T.textMuted }}>app.markme.io/dashboard</div>
           </div>
@@ -453,14 +530,15 @@ function AuthPage({ mode, onNavigate, onLogin }) {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text, display:"flex", flexDirection:"column" }}>
       <Atmosphere />
+      <SkipLink />
 
       {/* Top bar */}
-      <div style={{ padding:"16px 20px", position:"relative", zIndex:1 }}>
-        <div onClick={()=>onNavigate("landing")} style={{ cursor:"pointer" }}><Logo /></div>
-      </div>
+      <nav aria-label="Back to home" style={{ padding:"16px 20px", position:"relative", zIndex:1 }}>
+        <div onClick={()=>onNavigate("landing")} role="button" tabIndex={0} aria-label="Go to homepage" onKeyDown={e=>{if(e.key==="Enter")onNavigate("landing")}} style={{ cursor:"pointer", display:"inline-block" }}><Logo /></div>
+      </nav>
 
       {/* Form */}
-      <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", position:"relative", zIndex:1 }}>
+      <main id="main-content" style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px", position:"relative", zIndex:1 }}>
         <div style={{ width:400, maxWidth:"100%", animation:"mmSlideUp .3s ease both" }}>
           <div style={{ marginBottom:32 }}>
             <h1 style={{ fontFamily:T.font, fontSize:28, fontWeight:800, letterSpacing:"-0.04em", marginBottom:8 }}>
@@ -471,7 +549,7 @@ function AuthPage({ mode, onNavigate, onLogin }) {
             </p>
           </div>
 
-          <form onSubmit={submit}>
+          <form onSubmit={submit} aria-label={isLogin ? "Sign in form" : "Sign up form"}>
             {!isLogin && (
               <Field label="Full Name" placeholder="Your name" icon={<I.User />} value={name} onChange={e=>setName(e.target.value)} />
             )}
@@ -480,7 +558,7 @@ function AuthPage({ mode, onNavigate, onLogin }) {
               rightIcon={showPass ? <I.EyeOff /> : <I.Eye />} onRightClick={()=>setShowPass(!showPass)}
               value={pass} onChange={e=>setPass(e.target.value)} />
 
-            {error && <div style={{ fontSize:12, color:T.error, marginBottom:12, fontWeight:600, padding:"8px 12px", background:T.error+"15", border:`1px solid ${T.error}30` }}>{error}</div>}
+            {error && <div role="alert" style={{ fontSize:12, color:T.error, marginBottom:12, fontWeight:600, padding:"8px 12px", background:T.error+"15", border:`1px solid ${T.error}30` }}>{error}</div>}
 
             <button type="submit" disabled={loading} style={{
               ...S.btn, width:"100%", padding:"13px", background:loading?"rgba(255,255,255,0.8)":"#fff", color:T.bg, fontSize:14, fontWeight:800,
@@ -542,17 +620,18 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text }}>
       <Atmosphere />
+      <SkipLink />
 
       {/* Nav */}
-      <nav style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
+      <nav aria-label="Profile navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
         <div style={{ maxWidth:800, margin:"0 auto", padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div onClick={()=>onNavigate("dashboard")} style={{ cursor:"pointer" }}><Logo /></div>
+          <div onClick={()=>onNavigate("dashboard")} role="button" tabIndex={0} aria-label="Go to dashboard" onKeyDown={e=>{if(e.key==="Enter")onNavigate("dashboard")}} style={{ cursor:"pointer" }}><Logo /></div>
           <div style={{ display:"flex", gap:8 }}>
-            <button onClick={()=>onNavigate("dashboard")} style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 14px", border:`1px solid ${T.border}`, fontSize:12 }}
+            <button onClick={()=>onNavigate("dashboard")} aria-label="Go to dashboard" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 14px", border:`1px solid ${T.border}`, fontSize:12 }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}>
               <I.Grid /> Dashboard
             </button>
-            <button onClick={onLogout} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:"6px 10px", border:`1px solid ${T.border}` }}
+            <button onClick={onLogout} aria-label="Log out" style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:"6px 10px", border:`1px solid ${T.border}` }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=T.error+"60";e.currentTarget.style.color=T.error}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textMuted}}>
               <I.LogOut />
             </button>
@@ -560,7 +639,7 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
         </div>
       </nav>
 
-      <main style={{ maxWidth:800, margin:"0 auto", padding:"32px 20px 60px", position:"relative", zIndex:1 }}>
+      <main id="main-content" style={{ maxWidth:800, margin:"0 auto", padding:"32px 20px 60px", position:"relative", zIndex:1 }}>
         <h1 style={{ fontFamily:T.font, fontSize:24, fontWeight:800, letterSpacing:"-0.04em", marginBottom:32 }}>Account</h1>
 
         {/* Profile section */}
@@ -568,7 +647,7 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
           <div style={{ display:"flex", alignItems:"center", gap:20, marginBottom:24, flexWrap:"wrap" }}>
             <div style={{ width:72, height:72, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, fontWeight:800, color:"#fff", flexShrink:0, position:"relative" }}>
               {user.name?.[0]?.toUpperCase() || "U"}
-              <div style={{ position:"absolute", bottom:-4, right:-4, width:24, height:24, background:T.bgPanel, border:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:T.textMuted }}>
+              <div role="button" tabIndex={0} aria-label="Upload profile photo" style={{ position:"absolute", bottom:-4, right:-4, width:24, height:24, background:T.bgPanel, border:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:T.textMuted }}>
                 <I.Camera />
               </div>
             </div>
@@ -645,7 +724,7 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
         <div style={{ background:T.bgEl, border:`1px solid ${T.error}25`, padding:24, animation:"mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 400ms both" }}>
           <h3 style={{ fontSize:14, fontWeight:800, color:T.error, marginBottom:8, letterSpacing:"-0.02em" }}>Danger Zone</h3>
           <p style={{ fontSize:12, color:T.textMuted, marginBottom:16, lineHeight:1.5 }}>Permanently delete your account and all associated data. This action cannot be undone.</p>
-          <button style={{ ...S.btn, background:"transparent", color:T.error, padding:"8px 16px", border:`1px solid ${T.error}40`, fontSize:12 }}
+          <button aria-label="Delete account permanently" style={{ ...S.btn, background:"transparent", color:T.error, padding:"8px 16px", border:`1px solid ${T.error}40`, fontSize:12 }}
             onMouseEnter={e=>{e.currentTarget.style.background=T.error+"15"}} onMouseLeave={e=>{e.currentTarget.style.background="transparent"}}>
             Delete Account
           </button>
@@ -672,24 +751,31 @@ function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin }) {
   const [hovered, setHovered] = useState(false);
   const copy = () => { navigator.clipboard?.writeText(bm.url); setCopied(true); setTimeout(()=>setCopied(false),1500); };
   const ac = ACCENTS[accent]||ACCENTS[0];
+  const actions = [
+    {icon:copied?<I.Check/>:<I.Copy/>,fn:copy,label:copied?"URL copied":"Copy URL"},
+    {icon:<I.Pin/>,fn:()=>onTogglePin(bm.id),label:bm.pinned?"Unpin bookmark":"Pin bookmark"},
+    {icon:<I.Edit/>,fn:()=>onEdit(bm),label:"Edit bookmark"},
+    {icon:<I.Trash/>,fn:()=>onDelete(bm.id),label:"Delete bookmark"},
+  ];
   return (
-    <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 12px", background:hovered?"rgba(255,255,255,0.03)":"transparent", borderLeft:bm.pinned?`2px solid ${ac.bg}`:"2px solid transparent", transition:"all 0.15s" }}>
-      <img src={getFavicon(bm.url)} alt="" width={20} height={20} style={{ marginTop:2, flexShrink:0 }} onError={e=>e.target.style.display="none"} />
+    <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} onFocus={()=>setHovered(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setHovered(false)}}
+      role="listitem" style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 12px", background:hovered?"rgba(255,255,255,0.03)":"transparent", borderLeft:bm.pinned?`2px solid ${ac.bg}`:"2px solid transparent", transition:"all 0.15s" }}>
+      <img src={getFavicon(bm.url)} alt="" width={20} height={20} style={{ marginTop:2, flexShrink:0 }} onError={e=>e.target.style.display="none"} aria-hidden="true" />
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:1 }}>
-          {bm.pinned && <span style={{ color:ac.bg, display:"flex" }}><I.Pin /></span>}
-          <a href={bm.url} target="_blank" rel="noopener noreferrer" style={{ fontSize:13, fontWeight:700, color:T.text, textDecoration:"none", fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", letterSpacing:"-0.01em", transition:"color 0.15s" }}
+          {bm.pinned && <span style={{ color:ac.bg, display:"flex" }} aria-label="Pinned"><I.Pin /></span>}
+          <a href={bm.url} target="_blank" rel="noopener noreferrer" aria-label={`${bm.title} — opens in new tab`} style={{ fontSize:13, fontWeight:700, color:T.text, textDecoration:"none", fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", letterSpacing:"-0.01em", transition:"color 0.15s" }}
             onMouseEnter={e=>e.target.style.color=ac.bg} onMouseLeave={e=>e.target.style.color=T.text}>{bm.title}</a>
-          <span style={{ opacity:0.3, display:"flex" }}><I.External /></span>
+          <span style={{ opacity:0.3, display:"flex" }} aria-hidden="true"><I.External /></span>
         </div>
-        <div style={{ fontSize:11, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, marginBottom:bm.tags?.length?5:0 }}><I.Globe /> {getDomain(bm.url)}</div>
+        <div style={{ fontSize:11, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, marginBottom:bm.tags?.length?5:0 }} aria-label={`Domain: ${getDomain(bm.url)}`}><I.Globe /> {getDomain(bm.url)}</div>
         {bm.note && <div style={{ fontSize:11, color:T.textSec, marginBottom:5 }}>{bm.note}</div>}
-        {bm.tags?.length>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:3 }}>{bm.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
+        {bm.tags?.length>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:3 }} role="list" aria-label="Bookmark tags">{bm.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
       </div>
-      <div style={{ display:"flex", gap:1, flexShrink:0, opacity:hovered?1:0, transition:"opacity 0.15s" }}>
-        {[{icon:copied?<I.Check/>:<I.Copy/>,fn:copy},{icon:<I.Pin/>,fn:()=>onTogglePin(bm.id)},{icon:<I.Edit/>,fn:()=>onEdit(bm)},{icon:<I.Trash/>,fn:()=>onDelete(bm.id)}].map((b,i)=>(
-          <button key={i} onClick={b.fn} style={{ ...S.btn, background:"transparent", padding:5, color:T.textMuted }}
-            onMouseEnter={e=>{e.currentTarget.style.color=T.text;e.currentTarget.style.background="rgba(255,255,255,0.06)"}} onMouseLeave={e=>{e.currentTarget.style.color=T.textMuted;e.currentTarget.style.background="transparent"}}>{b.icon}</button>
+      <div style={{ display:"flex", gap:1, flexShrink:0, opacity:hovered?1:0, transition:"opacity 0.15s" }} className="mm-bm-actions">
+        {actions.map((b,i)=>(
+          <button key={i} onClick={b.fn} aria-label={b.label} style={{ ...S.btn, background:"transparent", padding:5, color:T.textMuted }}
+            onMouseEnter={e=>{e.currentTarget.style.color=T.text;e.currentTarget.style.background="rgba(255,255,255,0.06)"}} onMouseLeave={e=>{e.currentTarget.style.color=T.textMuted;e.currentTarget.style.background="transparent"}} onFocus={e=>e.currentTarget.style.color=T.text} onBlur={e=>e.currentTarget.style.color=T.textMuted}>{b.icon}</button>
         ))}
       </div>
     </div>
@@ -725,32 +811,32 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, allTags }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
   return (
-    <div style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
+    <article aria-label={`${cat.name} category — ${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="6px 6px 0 rgba(0,0,0,0.4)"}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.3)"}}>
-      <div style={{ height:3, background:ac.bg }} />
-      <div style={{ position:"absolute", top:-40, right:-40, width:120, height:120, borderRadius:"50%", background:ac.bg, filter:"blur(60px)", opacity:0.12, pointerEvents:"none" }} />
+      <div style={{ height:3, background:ac.bg }} aria-hidden="true" />
+      <div style={{ position:"absolute", top:-40, right:-40, width:120, height:120, borderRadius:"50%", background:ac.bg, filter:"blur(60px)", opacity:0.12, pointerEvents:"none" }} aria-hidden="true" />
       <div style={{ padding:"16px 18px 12px", position:"relative" }}>
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0 }}>
-            <span style={{ fontSize:22, lineHeight:1 }}>{cat.icon}</span>
+            <span style={{ fontSize:22, lineHeight:1 }} aria-hidden="true">{cat.icon}</span>
             <div style={{ minWidth:0 }}>
               <h3 style={{ margin:0, fontFamily:T.font, fontSize:15, fontWeight:800, color:T.text, letterSpacing:"-0.03em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cat.name}</h3>
               <span style={{ fontSize:11, color:T.textMuted }}>{cat.bookmarks.length} link{cat.bookmarks.length!==1?"s":""}</span>
             </div>
           </div>
-          <div style={{ display:"flex", gap:2 }}>
-            <button onClick={()=>onEdit(cat)} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Edit /></button>
-            <button onClick={()=>onDelete(cat.id)} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.error} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Trash /></button>
-            <button onClick={()=>setExp(!exp)} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }}><I.Chev style={{ transform:exp?"rotate(180deg)":"rotate(0)", transition:"transform 0.2s" }} /></button>
+          <div style={{ display:"flex", gap:2 }} role="toolbar" aria-label={`${cat.name} actions`}>
+            <button onClick={()=>onEdit(cat)} aria-label={`Edit ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Edit /></button>
+            <button onClick={()=>onDelete(cat.id)} aria-label={`Delete ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }} onMouseEnter={e=>e.currentTarget.style.color=T.error} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}><I.Trash /></button>
+            <button onClick={()=>setExp(!exp)} aria-expanded={exp} aria-label={exp ? `Collapse ${cat.name}` : `Expand ${cat.name}`} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:5 }}><I.Chev style={{ transform:exp?"rotate(180deg)":"rotate(0)", transition:"transform 0.2s" }} /></button>
           </div>
         </div>
-        {cat.tags?.length>0&&<div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:8 }}>{cat.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
+        {cat.tags?.length>0&&<div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:8 }} role="list" aria-label="Category tags">{cat.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
       </div>
       <AnimatedCollapse open={exp}>
-        <div style={{ borderTop:`1px solid ${T.border}` }}>
+        <div style={{ borderTop:`1px solid ${T.border}` }} role="list" aria-label={`Bookmarks in ${cat.name}`}>
         {sorted.map((bm,bi)=><div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}><BookmarkRow bm={bm} accent={cat.color} onEdit={setEditBm} onDelete={id=>onUpdate({...cat,bookmarks:cat.bookmarks.filter(b=>b.id!==id)})} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} /></div>)}
-        <button onClick={()=>setAddBm(true)} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12 }}
+        <button onClick={()=>setAddBm(true)} aria-label={`Add bookmark to ${cat.name}`} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12 }}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color=ac.bg}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMuted}}><I.Plus /> Add Bookmark</button>
         </div>
       </AnimatedCollapse>
@@ -771,13 +857,13 @@ function CatModal({ open, onClose, onSave, cat }) {
       <Field label="Name" placeholder="My Collection" value={f.name} onChange={e=>setF({...f,name:e.target.value})} />
       <div style={{ marginBottom:14 }}>
         <label style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:6, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>Icon</label>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-          {emojis.map(e=><button key={e} onClick={()=>setF({...f,icon:e})} style={{ width:36, height:36, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", background:f.icon===e?ac.bg+"20":T.bgInput, border:f.icon===e?`1px solid ${ac.bg}`:`1px solid ${T.border}`, borderRadius:0 }}>{e}</button>)}
+        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }} role="radiogroup" aria-label="Select icon">
+          {emojis.map(e=><button key={e} onClick={()=>setF({...f,icon:e})} role="radio" aria-checked={f.icon===e} aria-label={`Icon ${e}`} style={{ width:36, height:36, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", background:f.icon===e?ac.bg+"20":T.bgInput, border:f.icon===e?`1px solid ${ac.bg}`:`1px solid ${T.border}`, borderRadius:0 }}>{e}</button>)}
         </div>
       </div>
       <div style={{ marginBottom:14 }}>
         <label style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:6, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>Accent</label>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{ACCENTS.map((c,i)=><button key={i} onClick={()=>setF({...f,color:i})} style={{ width:32, height:32, background:c.bg, cursor:"pointer", border:f.color===i?"2px solid #fff":"2px solid transparent", borderRadius:0, boxShadow:f.color===i?`0 0 12px ${c.glow}`:"none" }} />)}</div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }} role="radiogroup" aria-label="Select accent color">{ACCENTS.map((c,i)=><button key={i} onClick={()=>setF({...f,color:i})} role="radio" aria-checked={f.color===i} aria-label={`Color ${i+1}`} style={{ width:32, height:32, background:c.bg, cursor:"pointer", border:f.color===i?"2px solid #fff":"2px solid transparent", borderRadius:0, boxShadow:f.color===i?`0 0 12px ${c.glow}`:"none" }} />)}</div>
       </div>
       <div style={{ marginBottom:18 }}>
         <label style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:5, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>Tags</label>
@@ -786,6 +872,32 @@ function CatModal({ open, onClose, onSave, cat }) {
       </div>
       <button onClick={save} style={{ ...S.btn, width:"100%", padding:"12px", background:"#fff", color:T.bg, fontSize:14, fontWeight:800, boxShadow:"4px 4px 0 rgba(0,0,0,0.4)" }}>{cat?"Save Changes":"Create Category"}</button>
     </Modal>
+  );
+}
+
+/* ── Mobile Nav Overlay (with focus trap) ── */
+function MobileNavOverlay({ onClose, items }) {
+  const trapRef = useFocusTrap(true);
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Navigation menu" ref={trapRef}
+      style={{ position:"fixed", inset:0, zIndex:900, background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .15s ease" }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:T.bgEl, borderBottom:`1px solid ${T.border}`, padding:16, animation:"mmSlideDown .2s ease" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <span style={{ fontWeight:800, fontSize:16 }}>Menu</span>
+          <button onClick={onClose} aria-label="Close menu" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
+        </div>
+        <nav aria-label="Mobile navigation">
+          {items.map((it,i) => (
+            <button key={i} onClick={it.fn} style={{ ...S.btn, width:"100%", padding:14, justifyContent:"flex-start", background:"transparent", color:T.textSec, borderBottom:`1px solid ${T.border}`, fontSize:14, gap:10 }}>{it.icon} {it.label}</button>
+          ))}
+        </nav>
+      </div>
+    </div>
   );
 }
 
@@ -811,46 +923,45 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
   return (
     <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text, position:"relative" }}>
       <Atmosphere />
+      <SkipLink />
 
-      <nav style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
+      <nav aria-label="Main navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <Logo />
           <div className="mm-desk" style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"6px 12px", minWidth:180 }}>
-              <I.Search s={14} /><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" style={{ border:"none", outline:"none", fontSize:13, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
-              {search&&<button onClick={()=>setSearch("")} style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
+            <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"6px 12px", minWidth:180 }}>
+              <I.Search s={14} /><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" aria-label="Search bookmarks" style={{ border:"none", outline:"none", fontSize:13, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
+              {search&&<button onClick={()=>setSearch("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
             </div>
-            <button onClick={exportData} title="Export" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Export /></button>
-            <button onClick={()=>fileRef.current?.click()} title="Import" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Import /></button>
-            <input ref={fileRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} />
-            <button onClick={()=>setShowNewCat(true)} style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
+            <button onClick={exportData} title="Export" aria-label="Export bookmarks as JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Export /></button>
+            <button onClick={()=>fileRef.current?.click()} title="Import" aria-label="Import bookmarks from JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Import /></button>
+            <input ref={fileRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} aria-hidden="true" tabIndex={-1} />
+            <button onClick={()=>setShowNewCat(true)} aria-label="Create new category" style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}><I.Plus /> New</button>
             {/* Profile button */}
-            <button onClick={()=>onNavigate("profile")} style={{ ...S.btn, width:32, height:32, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, color:"#fff", fontSize:12, fontWeight:800, flexShrink:0 }}
+            <button onClick={()=>onNavigate("profile")} aria-label={`Profile — ${user.name}`} style={{ ...S.btn, width:32, height:32, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, color:"#fff", fontSize:12, fontWeight:800, flexShrink:0 }}
               title="Profile">{user.name?.[0]?.toUpperCase()||"U"}</button>
           </div>
-          <button className="mm-mob-btn" onClick={()=>setMobileNav(!mobileNav)} style={{ ...S.btn, background:"transparent", color:T.textSec, padding:6, display:"none" }}><I.Menu /></button>
+          <button className="mm-mob-btn" onClick={()=>setMobileNav(!mobileNav)} aria-label="Open menu" aria-expanded={mobileNav} style={{ ...S.btn, background:"transparent", color:T.textSec, padding:6, display:"none" }}><I.Menu /></button>
         </div>
       </nav>
 
       {/* Mobile menu */}
-      {mobileNav && (
-        <div style={{ position:"fixed", inset:0, zIndex:900, background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .15s ease" }} onClick={()=>setMobileNav(false)}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:T.bgEl, borderBottom:`1px solid ${T.border}`, padding:16, animation:"mmSlideDown .2s ease" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:800, fontSize:16 }}>Menu</span><button onClick={()=>setMobileNav(false)} style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button></div>
-            {[{icon:<I.Plus />,label:"New Category",fn:()=>{setShowNewCat(true);setMobileNav(false)}},{icon:<I.Export />,label:"Export",fn:()=>{exportData();setMobileNav(false)}},{icon:<I.Import />,label:"Import",fn:()=>{fileRef.current?.click();setMobileNav(false)}},{icon:<I.User />,label:"Profile",fn:()=>{onNavigate("profile");setMobileNav(false)}},{icon:<I.LogOut />,label:"Log out",fn:()=>{onLogout();setMobileNav(false)}}].map((it,i)=>(
-              <button key={i} onClick={it.fn} style={{ ...S.btn, width:"100%", padding:14, justifyContent:"flex-start", background:"transparent", color:T.textSec, borderBottom:`1px solid ${T.border}`, fontSize:14, gap:10 }}>{it.icon} {it.label}</button>
-            ))}
-          </div>
-        </div>
-      )}
+      {mobileNav && <MobileNavOverlay onClose={()=>setMobileNav(false)}
+        items={[
+          {icon:<I.Plus />,label:"New Category",fn:()=>{setShowNewCat(true);setMobileNav(false)}},
+          {icon:<I.Export />,label:"Export",fn:()=>{exportData();setMobileNav(false)}},
+          {icon:<I.Import />,label:"Import",fn:()=>{fileRef.current?.click();setMobileNav(false)}},
+          {icon:<I.User />,label:"Profile",fn:()=>{onNavigate("profile");setMobileNav(false)}},
+          {icon:<I.LogOut />,label:"Log out",fn:()=>{onLogout();setMobileNav(false)}},
+        ]} />}
 
-      <main style={{ maxWidth:1100, margin:"0 auto", padding:"16px 16px 60px", position:"relative", zIndex:1 }}>
+      <main id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"16px 16px 60px", position:"relative", zIndex:1 }}>
         {/* Mobile search */}
         <div className="mm-mob-search" style={{ display:"none", marginBottom:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 12px" }}>
-            <I.Search s={14} /><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search bookmarks…" style={{ border:"none", outline:"none", fontSize:14, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
-            {search&&<button onClick={()=>setSearch("")} style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
+          <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 12px" }}>
+            <I.Search s={14} /><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search bookmarks…" aria-label="Search bookmarks" style={{ border:"none", outline:"none", fontSize:14, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
+            {search&&<button onClick={()=>setSearch("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
           </div>
         </div>
 
@@ -864,7 +975,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
           ))}
         </div>
 
-        {allTags.length>0&&<div style={{ marginBottom:18, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", overflowX:"auto", paddingBottom:4 }}>
+        {allTags.length>0&&<div role="toolbar" aria-label="Filter by tags" style={{ marginBottom:18, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", overflowX:"auto", paddingBottom:4 }}>
           <span style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginRight:2, flexShrink:0 }}>Filter</span>
           <Tag tag="ALL" small active={!filterTag} onClick={()=>setFilterTag(null)} />
           {allTags.map(t=><Tag key={t} tag={t} small active={filterTag===t} onClick={()=>setFilterTag(filterTag===t?null:t)} />)}
@@ -888,6 +999,9 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
       <style>{`
         @media(max-width:860px){.mm-grid{column-count:2!important}.mm-stats{grid-template-columns:repeat(2,1fr)!important}}
         @media(max-width:640px){.mm-grid{column-count:1!important}.mm-desk{display:none!important}.mm-mob-btn{display:flex!important}.mm-mob-search{display:block!important}.mm-stats{grid-template-columns:repeat(2,1fr)!important}}
+        *:focus-visible{outline:2px solid ${T.primary};outline-offset:2px}
+        input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:${T.primary}!important}
+        .mm-bm-actions:focus-within{opacity:1!important}
       `}</style>
     </div>
   );
