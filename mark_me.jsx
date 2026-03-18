@@ -127,19 +127,93 @@ const Logo = ({ size = 28 }) => (
   </div>
 );
 
-/* Modal */
+/* Modal — desktop: centered dialog, mobile: bottom sheet with drag handle */
 function Modal({ open, onClose, title, children, wide }) {
   const trapRef = useFocusTrap(open);
   const titleId = useRef(`modal-title-${Math.random().toString(36).slice(2,6)}`).current;
+  const isMobile = useIsMobile();
+
+  // Drag-to-dismiss for bottom sheet
+  const dragStartY = useRef(0);
+  const dragDist = useRef(0);
+  const [sheetOffset, setSheetOffset] = useState(0);
+  const dragging = useRef(false);
+
+  const onDragStart = e => {
+    if (!isMobile) return;
+    dragStartY.current = e.touches[0].clientY;
+    dragging.current = true;
+  };
+  const onDragMove = e => {
+    if (!dragging.current) return;
+    const dy = e.touches[0].clientY - dragStartY.current;
+    if (dy < 0) return;
+    dragDist.current = dy;
+    setSheetOffset(dy);
+  };
+  const onDragEnd = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    if (dragDist.current > 100) {
+      setSheetOffset(600);
+      setTimeout(() => { onClose(); setSheetOffset(0); }, 200);
+    } else {
+      setSheetOffset(0);
+    }
+    dragDist.current = 0;
+  };
 
   useEffect(() => {
     if (!open) return;
     const onKey = e => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    // Prevent body scroll on mobile when modal open
+    if (isMobile) document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose, isMobile]);
+
+  useEffect(() => {
+    if (!open) setSheetOffset(0);
+  }, [open]);
 
   if (!open) return null;
+
+  if (isMobile) {
+    // Bottom sheet mode
+    return (
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
+        style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", flexDirection:"column", justifyContent:"flex-end", background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .1s ease" }}
+        onClick={onClose}>
+        <div onClick={e=>e.stopPropagation()} style={{
+          background:T.bgEl, borderTop:`1px solid ${T.border}`, maxHeight:"88vh", overflowY:"auto",
+          animation:"mmSheetUp .25s cubic-bezier(0.32,0.72,0,1)",
+          transform:`translateY(${sheetOffset}px)`,
+          transition: dragging.current ? "none" : "transform 0.25s cubic-bezier(0.32,0.72,0,1)",
+          WebkitOverflowScrolling:"touch",
+        }}>
+          {/* Drag handle */}
+          <div onTouchStart={onDragStart} onTouchMove={onDragMove} onTouchEnd={onDragEnd}
+            style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center", cursor:"grab", touchAction:"none" }}>
+            <div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} />
+          </div>
+          <div style={{ padding:"14px 20px 24px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+              <h2 id={titleId} style={{ fontFamily:T.font, fontSize:17, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
+              <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
+            </div>
+            {children}
+          </div>
+          {/* Safe area padding for notched devices */}
+          <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)" }} />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop centered dialog
   return (
     <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
       style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }} onClick={onClose}>
@@ -265,62 +339,58 @@ function useUndoToast() {
 function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count }) {
   const trapRef = useFocusTrap(open);
   const titleId = useRef(`confirm-${Math.random().toString(36).slice(2,6)}`).current;
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!open) return;
     const onKey = e => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    if (isMobile) document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [open, onClose, isMobile]);
 
   if (!open) return null;
 
-  return (
-    <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={`${titleId}-desc`} ref={trapRef}
-      style={{ position:"fixed", inset:0, zIndex:1100, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.65)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }}
-      onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{
-        background:T.bgEl, border:`1px solid ${T.error}30`, width:400, maxWidth:"100%",
-        boxShadow:`8px 8px 0 rgba(0,0,0,0.5)`, animation:"mmSlideUp .2s ease", overflow:"hidden",
-      }}>
-        {/* Red top accent */}
-        <div style={{ height:3, background:T.error }} aria-hidden="true" />
-        <div style={{ padding:"24px 24px 20px" }}>
-          <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:16 }}>
-            <div style={{
-              width:40, height:40, background:T.error+"15", border:`1px solid ${T.error}30`,
-              display:"flex", alignItems:"center", justifyContent:"center", color:T.error, flexShrink:0,
-            }}><I.Trash /></div>
-            <div>
-              <h3 id={titleId} style={{ fontFamily:T.font, fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-0.02em", margin:"0 0 6px" }}>
-                {title || "Delete forever?"}
-              </h3>
-              <p id={`${titleId}-desc`} style={{ fontSize:13, color:T.textSec, lineHeight:1.5, margin:0 }}>
-                {message || <>Are you sure you want to delete <strong style={{ color:T.text }}>{itemName}</strong>?</>}
-              </p>
-              {count > 0 && (
-                <p style={{ fontSize:12, color:T.warning, marginTop:6, display:"flex", alignItems:"center", gap:4 }}>
-                  <I.Zap /> This will also remove {count} bookmark{count !== 1 ? "s" : ""} inside
-                </p>
-              )}
-            </div>
-          </div>
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-            <button onClick={onClose} aria-label="Cancel" style={{
-              ...S.btn, background:"transparent", color:T.textSec, padding:"9px 18px", border:`1px solid ${T.border}`, fontSize:13,
-            }}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}
-            >Cancel</button>
-            <button onClick={onConfirm} aria-label={`Confirm delete ${itemName || ""}`} style={{
-              ...S.btn, background:T.error, color:"#fff", padding:"9px 18px", fontSize:13, fontWeight:800,
-              boxShadow:"2px 2px 0 rgba(0,0,0,0.3)",
-            }}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}
-            >Delete</button>
+  const content = (
+    <>
+      <div style={{ height:3, background:T.error }} aria-hidden="true" />
+      <div style={{ padding:"24px 24px 20px" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:16 }}>
+          <div style={{ width:40, height:40, background:T.error+"15", border:`1px solid ${T.error}30`, display:"flex", alignItems:"center", justifyContent:"center", color:T.error, flexShrink:0 }}><I.Trash /></div>
+          <div>
+            <h3 id={titleId} style={{ fontFamily:T.font, fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-0.02em", margin:"0 0 6px" }}>{title || "Delete forever?"}</h3>
+            <p id={`${titleId}-desc`} style={{ fontSize:13, color:T.textSec, lineHeight:1.5, margin:0 }}>{message || <>Are you sure you want to delete <strong style={{ color:T.text }}>{itemName}</strong>?</>}</p>
+            {count > 0 && <p style={{ fontSize:12, color:T.warning, marginTop:6, display:"flex", alignItems:"center", gap:4 }}><I.Zap /> This will also remove {count} bookmark{count !== 1 ? "s" : ""} inside</p>}
           </div>
         </div>
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={onClose} aria-label="Cancel" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"9px 18px", border:`1px solid ${T.border}`, fontSize:13 }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}>Cancel</button>
+          <button onClick={onConfirm} aria-label={`Confirm delete ${itemName || ""}`} style={{ ...S.btn, background:T.error, color:"#fff", padding:"9px 18px", fontSize:13, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}>Delete</button>
+        </div>
+      </div>
+      {isMobile && <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)" }} />}
+    </>
+  );
+
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={`${titleId}-desc`} ref={trapRef}
+      style={{
+        position:"fixed", inset:0, zIndex:1100,
+        display:"flex", alignItems:isMobile?"flex-end":"center", justifyContent:"center",
+        background:"rgba(0,0,0,0.65)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease",
+        padding:isMobile?0:16,
+      }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:T.bgEl, border:isMobile?"none":`1px solid ${T.error}30`,
+        borderTop:isMobile?`1px solid ${T.error}30`:undefined,
+        width:isMobile?"100%":400, maxWidth:"100%", overflow:"hidden",
+        boxShadow:isMobile?"none":"8px 8px 0 rgba(0,0,0,0.5)",
+        animation:isMobile?"mmSheetUp .25s cubic-bezier(0.32,0.72,0,1)":"mmSlideUp .2s ease",
+      }}>
+        {isMobile && <div style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center" }}><div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} /></div>}
+        {content}
       </div>
     </div>
   );
@@ -483,6 +553,171 @@ const SkipLink = () => (
     Skip to content
   </a>
 );
+
+/* ── Mobile detection hook ── */
+function useIsMobile(breakpoint = 640) {
+  const [mobile, setMobile] = useState(typeof window !== "undefined" ? window.innerWidth <= breakpoint : false);
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpoint]);
+  return mobile;
+}
+
+/* ── Swipeable Bookmark Row ── */
+function SwipeRow({ onSwipeDelete, children }) {
+  const rowRef = useRef(null);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const currentX = useRef(0);
+  const swiping = useRef(false);
+  const [offset, setOffset] = useState(0);
+  const [showBg, setShowBg] = useState(false);
+  const THRESHOLD = 90;
+
+  const onTouchStart = e => {
+    const touch = e.touches[0];
+    startX.current = touch.clientX;
+    startY.current = touch.clientY;
+    currentX.current = 0;
+    swiping.current = false;
+  };
+
+  const onTouchMove = e => {
+    const touch = e.touches[0];
+    const dx = touch.clientX - startX.current;
+    const dy = touch.clientY - startY.current;
+    if (!swiping.current && Math.abs(dy) > Math.abs(dx)) return;
+    if (dx < -10) swiping.current = true;
+    if (!swiping.current) return;
+    e.preventDefault();
+    const clamped = Math.max(Math.min(dx, 0), -160);
+    currentX.current = clamped;
+    setOffset(clamped);
+    setShowBg(clamped < -20);
+  };
+
+  const onTouchEnd = () => {
+    if (currentX.current < -THRESHOLD) {
+      setOffset(-160);
+      setTimeout(() => {
+        onSwipeDelete();
+        setOffset(0);
+        setShowBg(false);
+      }, 200);
+    } else {
+      setOffset(0);
+      setShowBg(false);
+    }
+    swiping.current = false;
+  };
+
+  return (
+    <div style={{ position:"relative", overflow:"hidden" }}>
+      {/* Red background behind row */}
+      <div style={{
+        position:"absolute", inset:0, background:T.error,
+        display:"flex", alignItems:"center", justifyContent:"flex-end", paddingRight:20,
+        opacity:showBg ? 1 : 0, transition:"opacity 0.15s",
+      }}>
+        <div style={{ color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:700, fontFamily:T.font }}>
+          <I.Trash /> Delete
+        </div>
+      </div>
+      {/* Actual row content slides */}
+      <div ref={rowRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          transform:`translateX(${offset}px)`,
+          transition: offset === 0 || offset === -160 ? "transform 0.25s cubic-bezier(0.4,0,0.2,1)" : "none",
+          position:"relative", zIndex:1, background:T.bgEl,
+        }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ── Pull to Refresh ── */
+function PullToRefresh({ onRefresh, children }) {
+  const containerRef = useRef(null);
+  const startY = useRef(0);
+  const pulling = useRef(false);
+  const [pullDist, setPullDist] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_THRESHOLD = 70;
+
+  const onTouchStart = e => {
+    if (containerRef.current && containerRef.current.scrollTop === 0) {
+      startY.current = e.touches[0].clientY;
+      pulling.current = true;
+    }
+  };
+
+  const onTouchMove = e => {
+    if (!pulling.current) return;
+    const dy = e.touches[0].clientY - startY.current;
+    if (dy < 0) { pulling.current = false; setPullDist(0); return; }
+    const dampened = Math.min(dy * 0.45, 120);
+    setPullDist(dampened);
+  };
+
+  const onTouchEnd = () => {
+    if (pullDist >= PULL_THRESHOLD && !refreshing) {
+      setRefreshing(true);
+      setPullDist(50);
+      onRefresh();
+      setTimeout(() => {
+        setRefreshing(false);
+        setPullDist(0);
+      }, 800);
+    } else {
+      setPullDist(0);
+    }
+    pulling.current = false;
+  };
+
+  const ready = pullDist >= PULL_THRESHOLD;
+
+  return (
+    <div ref={containerRef}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+      style={{ position:"relative" }}>
+      {/* Pull indicator */}
+      <div aria-hidden="true" style={{
+        height: pullDist, overflow:"hidden",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        transition: pulling.current ? "none" : "height 0.3s cubic-bezier(0.4,0,0.2,1)",
+      }}>
+        {pullDist > 10 && (
+          <div style={{
+            display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+            opacity: Math.min(pullDist / 50, 1),
+            transform: `rotate(${refreshing ? 360 : ready ? 180 : (pullDist / PULL_THRESHOLD) * 180}deg)`,
+            transition: refreshing ? "transform 0.5s linear" : pulling.current ? "none" : "transform 0.2s ease",
+            animation: refreshing ? "mmSpin 0.6s linear infinite" : "none",
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={ready || refreshing ? T.primary : T.textMuted} strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+          </div>
+        )}
+        {pullDist > 10 && !refreshing && (
+          <span style={{ position:"absolute", fontSize:10, fontWeight:600, color:ready ? T.primary : T.textMuted, fontFamily:T.font, marginTop:30 }}>
+            {ready ? "Release to refresh" : "Pull to refresh"}
+          </span>
+        )}
+        {refreshing && (
+          <span style={{ position:"absolute", fontSize:10, fontWeight:600, color:T.primary, fontFamily:T.font, marginTop:30 }}>Refreshing…</span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: LANDING
@@ -941,6 +1176,7 @@ function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
 function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
+  const isMobile = useIsMobile();
   return (
     <article aria-label={`${cat.name} category — ${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="6px 6px 0 rgba(0,0,0,0.4)"}}
@@ -966,7 +1202,16 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
       </div>
       <AnimatedCollapse open={exp}>
         <div style={{ borderTop:`1px solid ${T.border}` }} role="list" aria-label={`Bookmarks in ${cat.name}`}>
-        {sorted.map((bm,bi)=><div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}><BookmarkRow bm={bm} accent={cat.color} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} /></div>)}
+        {sorted.map((bm,bi)=>{
+          const bmRow = <BookmarkRow bm={bm} accent={cat.color} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} />;
+          return (
+            <div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}>
+              {isMobile
+                ? <SwipeRow onSwipeDelete={()=>onDeleteBm(cat.id, bm.id, bm.title)}>{bmRow}</SwipeRow>
+                : bmRow}
+            </div>
+          );
+        })}
         <button onClick={()=>setAddBm(true)} aria-label={`Add bookmark to ${cat.name}`} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12 }}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color=ac.bg}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMuted}}><I.Plus /> Add Bookmark</button>
         </div>
@@ -1116,6 +1361,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         ]} />}
 
       <main id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"16px 16px 60px", position:"relative", zIndex:1 }}>
+        <PullToRefresh onRefresh={() => { setCategories([...categories]); flash("Refreshed ✓"); }}>
         {/* Mobile search */}
         <div className="mm-mob-search" style={{ display:"none", marginBottom:14 }}>
           <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 12px" }}>
@@ -1153,6 +1399,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         </div>
 
         {filtered.length===0&&<div style={{ textAlign:"center", padding:"80px 20px" }}><div style={{ fontSize:40, marginBottom:12, opacity:0.4 }}>🔍</div><p style={{ fontSize:16, fontWeight:700, color:T.textSec, marginBottom:6 }}>{search||filterTag?"No matches":"No categories yet"}</p><p style={{ fontSize:13, color:T.textMuted }}>{search||filterTag?"Try a different search":"Create your first category"}</p></div>}
+        </PullToRefresh>
       </main>
 
       <CatModal open={showNewCat} onClose={()=>setShowNewCat(false)} onSave={saveCat} />
@@ -1214,6 +1461,8 @@ export default function App() {
         @keyframes mmCardSpring{from{opacity:0;transform:translateY(18px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
         @keyframes mmRowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
         @keyframes mmStatPulse{0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
+        @keyframes mmSheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        @keyframes mmSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12)}
         body{background:${T.bg}}
