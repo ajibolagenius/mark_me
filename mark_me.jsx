@@ -95,9 +95,14 @@ const I = {
   Settings: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>,
   Star: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
   Bookmark: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>,
+  BookmarkSm: () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>,
   Grid: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="4"/><rect x="14" y="11" width="7" height="10"/><rect x="3" y="14" width="7" height="7"/></svg>,
   Tag: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
   Camera: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+  Sort: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 6h18M6 12h12M9 18h6"/></svg>,
+  AZ: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h4M4 18h4M4 12h6"/><path d="M17 3v18M14 18l3 3 3-3"/></svg>,
+  Hash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 9h16M4 15h16M10 3l-2 18M16 3l-2 18"/></svg>,
+  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1189,7 +1194,24 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
             <span style={{ fontSize:22, lineHeight:1 }} aria-hidden="true">{cat.icon}</span>
             <div style={{ minWidth:0 }}>
               <h3 style={{ margin:0, fontFamily:T.font, fontSize:15, fontWeight:800, color:T.text, letterSpacing:"-0.03em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cat.name}</h3>
-              <span style={{ fontSize:11, color:T.textMuted }}>{cat.bookmarks.length} link{cat.bookmarks.length!==1?"s":""}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:3 }}>
+                <span aria-label={`${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{
+                  display:"inline-flex", alignItems:"center", gap:3, padding:"1px 7px",
+                  fontSize:10, fontWeight:700, fontFamily:T.font, letterSpacing:"0.02em",
+                  background:ac.bg+"18", color:ac.bg, border:`1px solid ${ac.bg}30`,
+                }}>
+                  <I.BookmarkSm /> {cat.bookmarks.length}
+                </span>
+                {cat.bookmarks.filter(b=>b.pinned).length > 0 && (
+                  <span aria-label={`${cat.bookmarks.filter(b=>b.pinned).length} pinned`} style={{
+                    display:"inline-flex", alignItems:"center", gap:3, padding:"1px 7px",
+                    fontSize:10, fontWeight:700, fontFamily:T.font, letterSpacing:"0.02em",
+                    background:T.warning+"18", color:T.warning, border:`1px solid ${T.warning}30`,
+                  }}>
+                    <I.Pin /> {cat.bookmarks.filter(b=>b.pinned).length}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div style={{ display:"flex", gap:2 }} role="toolbar" aria-label={`${cat.name} actions`}>
@@ -1281,14 +1303,24 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
   const [search,setSearch]=useState(""); const [filterTag,setFilterTag]=useState(null);
   const [showNewCat,setShowNewCat]=useState(false); const [editCat,setEditCat]=useState(null);
   const [mobileNav,setMobileNav]=useState(false);
-  const [confirmDel, setConfirmDel] = useState(null); // { cat } or null
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [sortBy, setSortBy] = useState("default"); // default | az | za | most | least | newest
   const fileRef=useRef(null); const { flash, flashUndo, ToastEl } = useUndoToast();
 
   const allTags = useMemo(()=>[...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))],[categories]);
-  const filtered = useMemo(()=>categories.map(cat=>{
-    const bms=cat.bookmarks.filter(bm=>{const ms=!search||bm.title.toLowerCase().includes(search.toLowerCase())||bm.url.toLowerCase().includes(search.toLowerCase())||bm.note?.toLowerCase().includes(search.toLowerCase());const mt=!filterTag||bm.tags?.includes(filterTag)||cat.tags?.includes(filterTag);return ms&&mt});
-    return {...cat,bookmarks:bms};
-  }).filter(cat=>(filterTag&&cat.tags?.includes(filterTag))||cat.bookmarks.length>0||(!search&&!filterTag)),[categories,search,filterTag]);
+  const filtered = useMemo(()=>{
+    let result = categories.map(cat=>{
+      const bms=cat.bookmarks.filter(bm=>{const ms=!search||bm.title.toLowerCase().includes(search.toLowerCase())||bm.url.toLowerCase().includes(search.toLowerCase())||bm.note?.toLowerCase().includes(search.toLowerCase());const mt=!filterTag||bm.tags?.includes(filterTag)||cat.tags?.includes(filterTag);return ms&&mt});
+      return {...cat,bookmarks:bms};
+    }).filter(cat=>(filterTag&&cat.tags?.includes(filterTag))||cat.bookmarks.length>0||(!search&&!filterTag));
+    // Apply sort
+    if (sortBy === "az") result = [...result].sort((a,b) => a.name.localeCompare(b.name));
+    else if (sortBy === "za") result = [...result].sort((a,b) => b.name.localeCompare(a.name));
+    else if (sortBy === "most") result = [...result].sort((a,b) => b.bookmarks.length - a.bookmarks.length);
+    else if (sortBy === "least") result = [...result].sort((a,b) => a.bookmarks.length - b.bookmarks.length);
+    else if (sortBy === "newest") result = [...result].reverse();
+    return result;
+  },[categories,search,filterTag,sortBy]);
 
   const saveCat=cat=>{if(categories.find(c=>c.id===cat.id))setCategories(categories.map(c=>c.id===cat.id?cat:c));else setCategories([...categories,cat]);setShowNewCat(false);setEditCat(null)};
   const exportData=()=>{const b=new Blob([JSON.stringify(categories,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="markme_bookmarks.json";a.click();URL.revokeObjectURL(u);flash("Exported ✓")};
@@ -1380,11 +1412,43 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
           ))}
         </div>
 
-        {allTags.length>0&&<div role="toolbar" aria-label="Filter by tags" style={{ marginBottom:18, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", overflowX:"auto", paddingBottom:4 }}>
+        {allTags.length>0&&<div role="toolbar" aria-label="Filter by tags" style={{ marginBottom:12, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", overflowX:"auto", paddingBottom:4 }}>
           <span style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginRight:2, flexShrink:0 }}>Filter</span>
           <Tag tag="ALL" small active={!filterTag} onClick={()=>setFilterTag(null)} />
           {allTags.map(t=><Tag key={t} tag={t} small active={filterTag===t} onClick={()=>setFilterTag(filterTag===t?null:t)} />)}
         </div>}
+
+        {/* Sort controls */}
+        <div role="toolbar" aria-label="Sort categories" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            <span style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginRight:2, flexShrink:0, display:"flex", alignItems:"center", gap:4 }}><I.Sort /> Sort</span>
+            {[
+              { id:"default", label:"Default", icon:null },
+              { id:"az", label:"A→Z", icon:<I.AZ /> },
+              { id:"za", label:"Z→A", icon:null },
+              { id:"most", label:"Most links", icon:<I.Hash /> },
+              { id:"least", label:"Fewest", icon:null },
+              { id:"newest", label:"Newest", icon:<I.Clock /> },
+            ].map(s=>(
+              <button key={s.id} onClick={()=>setSortBy(s.id)}
+                aria-pressed={sortBy===s.id}
+                aria-label={`Sort by ${s.label}`}
+                style={{
+                  ...S.btn, padding:"3px 10px", fontSize:10, fontWeight:700, letterSpacing:"0.02em", textTransform:"uppercase",
+                  background:sortBy===s.id?T.primary+"20":"transparent",
+                  color:sortBy===s.id?T.primary:T.textMuted,
+                  border:`1px solid ${sortBy===s.id?T.primary+"40":T.border}`,
+                  transition:"all 0.15s",
+                }}
+                onMouseEnter={e=>{if(sortBy!==s.id){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.textSec}}}
+                onMouseLeave={e=>{if(sortBy!==s.id){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textMuted}}}
+              >{s.label}</button>
+            ))}
+          </div>
+          <span style={{ fontSize:11, color:T.textMuted, fontFamily:T.font }}>
+            {filtered.length} categor{filtered.length===1?"y":"ies"} · {filtered.reduce((a,c)=>a+c.bookmarks.length,0)} links
+          </span>
+        </div>
 
         <div className="mm-grid" style={{ columnCount:3, columnGap:14 }}>
           {filtered.map((cat,i)=>(
