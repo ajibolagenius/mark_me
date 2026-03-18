@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 /* ══════════════════════════════════════════════════════════════════════════
    DESIGN TOKENS
@@ -570,6 +570,138 @@ function useIsMobile(breakpoint = 640) {
   return mobile;
 }
 
+/* ── Debounce hook ── */
+function useDebounce(value, delay = 150) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+/* ── Highlight matched text ── */
+function Highlight({ text, query }) {
+  if (!query || !text) return text || null;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} style={{ background:T.primary+"35", color:T.text, padding:"0 1px", borderRadius:0, fontWeight:700 }}>{part}</mark>
+      : part
+  );
+}
+
+/* ── Error Boundary ── */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(err, info) { console.error("ErrorBoundary caught:", err, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ background:T.bgEl, border:`1px solid ${T.error}30`, padding:24, margin:16, fontFamily:T.font }}>
+          <div style={{ height:3, background:T.error, marginBottom:16, marginTop:-24, marginLeft:-24, marginRight:-24 }} />
+          <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+            <div style={{ width:36, height:36, background:T.error+"15", border:`1px solid ${T.error}30`, display:"flex", alignItems:"center", justifyContent:"center", color:T.error, flexShrink:0 }}>
+              <I.Shield />
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <h3 style={{ fontFamily:T.font, fontSize:14, fontWeight:800, color:T.text, letterSpacing:"-0.02em", margin:"0 0 6px" }}>
+                {this.props.fallbackTitle || "Something went wrong"}
+              </h3>
+              <p style={{ fontSize:12, color:T.textMuted, lineHeight:1.5, margin:"0 0 12px" }}>
+                {this.props.fallbackMessage || "This section encountered an error. Your data is safe."}
+              </p>
+              <div style={{ fontSize:11, color:T.error, background:T.error+"10", border:`1px solid ${T.error}20`, padding:"6px 10px", marginBottom:12, fontFamily:"monospace", maxHeight:60, overflow:"auto", whiteSpace:"pre-wrap", wordBreak:"break-all" }}>
+                {this.state.error?.message || "Unknown error"}
+              </div>
+              <button onClick={() => this.setState({ error: null })}
+                style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:T.font, fontWeight:700, fontSize:12, cursor:"pointer", border:"none", borderRadius:0, background:T.error, color:"#fff", padding:"7px 16px", boxShadow:"2px 2px 0 rgba(0,0,0,0.3)", transition:"all 0.2s" }}>
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* ── Virtual Masonry Grid ── */
+function VirtualMasonry({ items, renderItem, columnCount = 3, gap = 14 }) {
+  const containerRef = useRef(null);
+  const [visibleSet, setVisibleSet] = useState(new Set());
+  const observerRef = useRef(null);
+  const sentinelRefs = useRef({});
+
+  // Estimated heights for placeholder sizing
+  const heightCache = useRef({});
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    observerRef.current = new IntersectionObserver(
+      entries => {
+        setVisibleSet(prev => {
+          const next = new Set(prev);
+          entries.forEach(e => {
+            const id = e.target.dataset.vid;
+            if (e.isIntersecting) next.add(id);
+            else next.delete(id);
+          });
+          return next;
+        });
+      },
+      { root: null, rootMargin: "200px 0px", threshold: 0 }
+    );
+    return () => observerRef.current?.disconnect();
+  }, []);
+
+  // Re-observe when items change
+  useEffect(() => {
+    const obs = observerRef.current;
+    if (!obs) return;
+    obs.disconnect();
+    Object.values(sentinelRefs.current).forEach(el => { if (el) obs.observe(el); });
+  }, [items.length]);
+
+  const setSentinelRef = useCallback((id, el) => {
+    sentinelRefs.current[id] = el;
+    if (el && observerRef.current) observerRef.current.observe(el);
+  }, []);
+
+  // Measure rendered cards and cache heights
+  const onCardRender = useCallback((id, el) => {
+    if (el) heightCache.current[id] = el.offsetHeight;
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ columnCount, columnGap: gap }} className="mm-grid">
+      {items.map((item, i) => {
+        const id = item.id || `vi-${i}`;
+        const isVisible = visibleSet.has(id);
+        const cachedH = heightCache.current[id];
+        return (
+          <div key={id}
+            ref={el => setSentinelRef(id, el)}
+            data-vid={id}
+            style={{ breakInside:"avoid", marginBottom: gap, animation: isVisible ? `mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${Math.min(80 + i*40, 400)}ms both` : "none" }}>
+            {isVisible ? (
+              <div ref={el => onCardRender(id, el)}>
+                {renderItem(item, i)}
+              </div>
+            ) : (
+              <div style={{ height: cachedH || 160, background:"transparent" }} aria-hidden="true" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Swipeable Bookmark Row ── */
 function SwipeRow({ onSwipeDelete, children }) {
   const rowRef = useRef(null);
@@ -1117,11 +1249,12 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: DASHBOARD (Bookmark Manager)
    ══════════════════════════════════════════════════════════════════════════ */
-function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin }) {
+function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin, searchQuery }) {
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
   const copy = () => { navigator.clipboard?.writeText(bm.url); setCopied(true); setTimeout(()=>setCopied(false),1500); };
   const ac = ACCENTS[accent]||ACCENTS[0];
+  const q = searchQuery || "";
   const actions = [
     {icon:copied?<I.Check/>:<I.Copy/>,fn:copy,label:copied?"URL copied":"Copy URL"},
     {icon:<I.Pin/>,fn:()=>onTogglePin(bm.id),label:bm.pinned?"Unpin bookmark":"Pin bookmark"},
@@ -1136,11 +1269,11 @@ function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin }) {
         <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:1 }}>
           {bm.pinned && <span style={{ color:ac.bg, display:"flex" }} aria-label="Pinned"><I.Pin /></span>}
           <a href={bm.url} target="_blank" rel="noopener noreferrer" aria-label={`${bm.title} — opens in new tab`} style={{ fontSize:13, fontWeight:700, color:T.text, textDecoration:"none", fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", letterSpacing:"-0.01em", transition:"color 0.15s" }}
-            onMouseEnter={e=>e.target.style.color=ac.bg} onMouseLeave={e=>e.target.style.color=T.text}>{bm.title}</a>
+            onMouseEnter={e=>e.target.style.color=ac.bg} onMouseLeave={e=>e.target.style.color=T.text}><Highlight text={bm.title} query={q} /></a>
           <span style={{ opacity:0.3, display:"flex" }} aria-hidden="true"><I.External /></span>
         </div>
-        <div style={{ fontSize:11, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, marginBottom:bm.tags?.length?5:0 }} aria-label={`Domain: ${getDomain(bm.url)}`}><I.Globe /> {getDomain(bm.url)}</div>
-        {bm.note && <div style={{ fontSize:11, color:T.textSec, marginBottom:5 }}>{bm.note}</div>}
+        <div style={{ fontSize:11, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, marginBottom:bm.tags?.length?5:0 }} aria-label={`Domain: ${getDomain(bm.url)}`}><I.Globe /> <Highlight text={getDomain(bm.url)} query={q} /></div>
+        {bm.note && <div style={{ fontSize:11, color:T.textSec, marginBottom:5 }}><Highlight text={bm.note} query={q} /></div>}
         {bm.tags?.length>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:3 }} role="list" aria-label="Bookmark tags">{bm.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
       </div>
       <div style={{ display:"flex", gap:1, flexShrink:0, opacity:hovered?1:0, transition:"opacity 0.15s" }} className="mm-bm-actions">
@@ -1178,10 +1311,11 @@ function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
   );
 }
 
-function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
+function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags, searchQuery }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
   const isMobile = useIsMobile();
+  const q = searchQuery || "";
   return (
     <article aria-label={`${cat.name} category — ${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="6px 6px 0 rgba(0,0,0,0.4)"}}
@@ -1193,7 +1327,7 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
           <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0 }}>
             <span style={{ fontSize:22, lineHeight:1 }} aria-hidden="true">{cat.icon}</span>
             <div style={{ minWidth:0 }}>
-              <h3 style={{ margin:0, fontFamily:T.font, fontSize:15, fontWeight:800, color:T.text, letterSpacing:"-0.03em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cat.name}</h3>
+              <h3 style={{ margin:0, fontFamily:T.font, fontSize:15, fontWeight:800, color:T.text, letterSpacing:"-0.03em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}><Highlight text={cat.name} query={q} /></h3>
               <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:3 }}>
                 <span aria-label={`${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{
                   display:"inline-flex", alignItems:"center", gap:3, padding:"1px 7px",
@@ -1225,7 +1359,7 @@ function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags }) {
       <AnimatedCollapse open={exp}>
         <div style={{ borderTop:`1px solid ${T.border}` }} role="list" aria-label={`Bookmarks in ${cat.name}`}>
         {sorted.map((bm,bi)=>{
-          const bmRow = <BookmarkRow bm={bm} accent={cat.color} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} />;
+          const bmRow = <BookmarkRow bm={bm} accent={cat.color} searchQuery={q} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} />;
           return (
             <div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}>
               {isMobile
@@ -1300,27 +1434,30 @@ function MobileNavOverlay({ onClose, items }) {
 }
 
 function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
-  const [search,setSearch]=useState(""); const [filterTag,setFilterTag]=useState(null);
+  const [searchInput,setSearchInput]=useState("");
+  const debouncedSearch = useDebounce(searchInput, 150);
+  const [filterTag,setFilterTag]=useState(null);
   const [showNewCat,setShowNewCat]=useState(false); const [editCat,setEditCat]=useState(null);
   const [mobileNav,setMobileNav]=useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
-  const [sortBy, setSortBy] = useState("default"); // default | az | za | most | least | newest
+  const [sortBy, setSortBy] = useState("default");
   const fileRef=useRef(null); const { flash, flashUndo, ToastEl } = useUndoToast();
+  const isSearching = searchInput !== debouncedSearch;
 
   const allTags = useMemo(()=>[...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))],[categories]);
   const filtered = useMemo(()=>{
+    const q = debouncedSearch;
     let result = categories.map(cat=>{
-      const bms=cat.bookmarks.filter(bm=>{const ms=!search||bm.title.toLowerCase().includes(search.toLowerCase())||bm.url.toLowerCase().includes(search.toLowerCase())||bm.note?.toLowerCase().includes(search.toLowerCase());const mt=!filterTag||bm.tags?.includes(filterTag)||cat.tags?.includes(filterTag);return ms&&mt});
+      const bms=cat.bookmarks.filter(bm=>{const ms=!q||bm.title.toLowerCase().includes(q.toLowerCase())||bm.url.toLowerCase().includes(q.toLowerCase())||bm.note?.toLowerCase().includes(q.toLowerCase());const mt=!filterTag||bm.tags?.includes(filterTag)||cat.tags?.includes(filterTag);return ms&&mt});
       return {...cat,bookmarks:bms};
-    }).filter(cat=>(filterTag&&cat.tags?.includes(filterTag))||cat.bookmarks.length>0||(!search&&!filterTag));
-    // Apply sort
+    }).filter(cat=>(filterTag&&cat.tags?.includes(filterTag))||cat.bookmarks.length>0||(!q&&!filterTag));
     if (sortBy === "az") result = [...result].sort((a,b) => a.name.localeCompare(b.name));
     else if (sortBy === "za") result = [...result].sort((a,b) => b.name.localeCompare(a.name));
     else if (sortBy === "most") result = [...result].sort((a,b) => b.bookmarks.length - a.bookmarks.length);
     else if (sortBy === "least") result = [...result].sort((a,b) => a.bookmarks.length - b.bookmarks.length);
     else if (sortBy === "newest") result = [...result].reverse();
     return result;
-  },[categories,search,filterTag,sortBy]);
+  },[categories,debouncedSearch,filterTag,sortBy]);
 
   const saveCat=cat=>{if(categories.find(c=>c.id===cat.id))setCategories(categories.map(c=>c.id===cat.id?cat:c));else setCategories([...categories,cat]);setShowNewCat(false);setEditCat(null)};
   const exportData=()=>{const b=new Blob([JSON.stringify(categories,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="markme_bookmarks.json";a.click();URL.revokeObjectURL(u);flash("Exported ✓")};
@@ -1365,9 +1502,10 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <Logo />
           <div className="mm-desk" style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"6px 12px", minWidth:180 }}>
-              <I.Search s={14} /><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" aria-label="Search bookmarks" style={{ border:"none", outline:"none", fontSize:13, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
-              {search&&<button onClick={()=>setSearch("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
+            <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${searchInput ? T.primary+"60" : T.border}`, padding:"6px 12px", minWidth:180, transition:"border-color 0.2s" }}>
+              <I.Search s={14} /><input value={searchInput} onChange={e=>setSearchInput(e.target.value)} placeholder="Search…" aria-label="Search bookmarks" style={{ border:"none", outline:"none", fontSize:13, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
+              {isSearching && <div style={{ width:12, height:12, border:`2px solid ${T.primary}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite", flexShrink:0 }} />}
+              {searchInput&&<button onClick={()=>setSearchInput("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
             </div>
             <button onClick={exportData} title="Export" aria-label="Export bookmarks as JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Export /></button>
             <button onClick={()=>fileRef.current?.click()} title="Import" aria-label="Import bookmarks from JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Import /></button>
@@ -1396,9 +1534,10 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         <PullToRefresh onRefresh={() => { setCategories([...categories]); flash("Refreshed ✓"); }}>
         {/* Mobile search */}
         <div className="mm-mob-search" style={{ display:"none", marginBottom:14 }}>
-          <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 12px" }}>
-            <I.Search s={14} /><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search bookmarks…" aria-label="Search bookmarks" style={{ border:"none", outline:"none", fontSize:14, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
-            {search&&<button onClick={()=>setSearch("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
+          <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${searchInput ? T.primary+"60" : T.border}`, padding:"8px 12px", transition:"border-color 0.2s" }}>
+            <I.Search s={14} /><input value={searchInput} onChange={e=>setSearchInput(e.target.value)} placeholder="Search bookmarks…" aria-label="Search bookmarks" style={{ border:"none", outline:"none", fontSize:14, fontFamily:T.font, background:"transparent", color:T.text, flex:1, fontWeight:500 }} />
+            {isSearching && <div style={{ width:12, height:12, border:`2px solid ${T.primary}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite", flexShrink:0 }} />}
+            {searchInput&&<button onClick={()=>setSearchInput("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
           </div>
         </div>
 
@@ -1450,19 +1589,18 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
           </span>
         </div>
 
-        <div className="mm-grid" style={{ columnCount:3, columnGap:14 }}>
-          {filtered.map((cat,i)=>(
-            <div key={cat.id} style={{ breakInside:"avoid", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${80 + i*60}ms both` }}>
-              <CatCard cat={cat} allTags={allTags}
-                onUpdate={c=>setCategories(categories.map(x=>x.id===c.id?c:x))}
-                onDelete={requestDeleteCat}
-                onDeleteBm={deleteBm}
-                onEdit={c=>setEditCat(c)} />
-            </div>
-          ))}
-        </div>
+        <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The bookmark grid encountered an error. Try refreshing.">
+        <VirtualMasonry items={filtered} columnCount={3} gap={14}
+          renderItem={(cat, i) => (
+            <CatCard cat={cat} allTags={allTags} searchQuery={debouncedSearch}
+              onUpdate={c=>setCategories(categories.map(x=>x.id===c.id?c:x))}
+              onDelete={requestDeleteCat}
+              onDeleteBm={deleteBm}
+              onEdit={c=>setEditCat(c)} />
+          )} />
+        </ErrorBoundary>
 
-        {filtered.length===0&&<div style={{ textAlign:"center", padding:"80px 20px" }}><div style={{ fontSize:40, marginBottom:12, opacity:0.4 }}>🔍</div><p style={{ fontSize:16, fontWeight:700, color:T.textSec, marginBottom:6 }}>{search||filterTag?"No matches":"No categories yet"}</p><p style={{ fontSize:13, color:T.textMuted }}>{search||filterTag?"Try a different search":"Create your first category"}</p></div>}
+        {filtered.length===0&&<div style={{ textAlign:"center", padding:"80px 20px" }}><div style={{ fontSize:40, marginBottom:12, opacity:0.4 }}>🔍</div><p style={{ fontSize:16, fontWeight:700, color:T.textSec, marginBottom:6 }}>{debouncedSearch||filterTag?"No matches":"No categories yet"}</p><p style={{ fontSize:13, color:T.textMuted }}>{debouncedSearch||filterTag?"Try a different search":"Create your first category"}</p></div>}
         </PullToRefresh>
       </main>
 
@@ -1532,11 +1670,11 @@ export default function App() {
         body{background:${T.bg}}
       `}</style>
       <PageTransition pageKey={page}>
-        {page === "landing" && <LandingPage onNavigate={navigate} />}
-        {page === "login" && <AuthPage mode="login" onNavigate={navigate} onLogin={login} />}
-        {page === "signup" && <AuthPage mode="signup" onNavigate={navigate} onLogin={login} />}
-        {page === "profile" && user && <ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} />}
-        {page === "dashboard" && user && <Dashboard user={user} categories={categories} setCategories={setCategories} onNavigate={navigate} onLogout={logout} />}
+        {page === "landing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The landing page encountered an error."><LandingPage onNavigate={navigate} /></ErrorBoundary>}
+        {page === "login" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The login form encountered an error."><AuthPage mode="login" onNavigate={navigate} onLogin={login} /></ErrorBoundary>}
+        {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} onLogin={login} /></ErrorBoundary>}
+        {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
+        {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} categories={categories} setCategories={setCategories} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
         {page === "dashboard" && !user && (() => { setPage("login"); return null; })()}
         {page === "profile" && !user && (() => { setPage("login"); return null; })()}
       </PageTransition>
