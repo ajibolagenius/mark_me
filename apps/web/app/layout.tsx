@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -15,10 +16,28 @@ export const metadata: Metadata = {
     "Save, tag, and browse your bookmarks in a visual grid designed for humans.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+async function getSession() {
+  try {
+    const { auth } = await import("@/auth");
+    return await auth();
+  } catch {
+    // Auth not configured (no DATABASE_URL) — render without session
+    return null;
+  }
+}
+
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const session = await getSession();
+
   return (
     <html lang="en" className={jakarta.variable}>
-      <body style={{ background: "#0D0D0D", margin: 0 }}>{children}</body>
+      <body className="bg-mm-bg font-sans text-mm-text antialiased">
+        <Providers session={session}>{children}</Providers>
+      </body>
     </html>
   );
 }
