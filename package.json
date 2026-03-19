@@ -1,0 +1,26 @@
+{
+  "name": "mark-me",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check",
+    "test": "turbo test",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.5.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild"],
+    "overrides": {
+      "drizzle-orm": "0.45.1"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+# dependencies
+node_modules
+
+# build output
+dist
+.next
+!.next/cache
+
+# turbo
+.turbo
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# misc
+.vite
+.cursor
+data
+*.local
+apps/current/package-lock.json
+apps/current/dist/
+apps/current/node_modules/

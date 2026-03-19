@@ -1,0 +1,23 @@
+{
+  "name": "@markme/ai",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "type-check": "tsc --noEmit",
+    "lint": "biome check src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@markme/config": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

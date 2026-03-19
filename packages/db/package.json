@@ -1,0 +1,36 @@
+{
+  "name": "@markme/db",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./client": "./src/client.ts",
+    "./seed": "./src/seed.ts",
+    "./postgres-options": "./src/postgres-connection-options.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "type-check": "tsc --noEmit",
+    "lint": "biome check src/",
+    "clean": "rm -rf dist",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.1",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@markme/config": "workspace:*",
+    "@types/node": "^22.19.15",
+    "dotenv": "^16.5.0",
+    "drizzle-kit": "^0.31.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
