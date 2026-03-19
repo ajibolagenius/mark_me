@@ -7,7 +7,7 @@ function handler(req: Request) {
     endpoint: "/api/trpc",
     router: appRouter,
     req,
-    createContext: createApiContext,
+    createContext: ({ req: r }) => createApiContext(r),
   });
 }
 

@@ -41,7 +41,7 @@ export function MobileNavOverlay({ open, onClose, items }: MobileNavOverlayProps
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[900] bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-900 bg-black/50 backdrop-blur-sm"
           onClick={onClose}
         >
           <motion.div

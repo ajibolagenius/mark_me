@@ -149,7 +149,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                     <span className="text-[11px] font-bold text-mm-text">{u.name}</span>
                     <span className="font-mono text-[10px] text-mm-text-muted">{em}</span>
                     <span
-                      className={`mt-[1px] text-[9px] font-bold uppercase tracking-wider ${u.plan === "pro" ? "text-mm-primary" : "text-mm-text-muted"}`}
+                      className={`mt-px text-[9px] font-bold uppercase tracking-wider ${u.plan === "pro" ? "text-mm-primary" : "text-mm-text-muted"}`}
                     >
                       {u.plan} plan
                     </span>
@@ -183,13 +183,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                 {error && (
                   <div
                     role="alert"
-                    className="mb-3 border border-mm-error/20 bg-mm-error/[0.08] px-3 py-2 text-xs font-semibold text-mm-error"
+                    className="mb-3 border border-mm-error/20 bg-mm-error/8 px-3 py-2 text-xs font-semibold text-mm-error"
                   >
                     {error}
                   </div>
                 )}
                 {notice && (
-                  <div className="mb-3 border border-mm-success/20 bg-mm-success/[0.08] px-3 py-2 text-xs font-semibold text-mm-success">
+                  <div className="mb-3 border border-mm-success/20 bg-mm-success/8 px-3 py-2 text-xs font-semibold text-mm-success">
                     {notice}
                   </div>
                 )}
@@ -227,13 +227,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
               {error && (
                 <div
                   role="alert"
-                  className="mb-3 border border-mm-error/20 bg-mm-error/[0.08] px-3 py-2 text-xs font-semibold text-mm-error"
+                  className="mb-3 border border-mm-error/20 bg-mm-error/8 px-3 py-2 text-xs font-semibold text-mm-error"
                 >
                   {error}
                 </div>
               )}
               {notice && (
-                <div className="mb-3 border border-mm-success/20 bg-mm-success/[0.08] px-3 py-2 text-xs font-semibold text-mm-success">
+                <div className="mb-3 border border-mm-success/20 bg-mm-success/8 px-3 py-2 text-xs font-semibold text-mm-success">
                   {notice}
                 </div>
               )}
