@@ -8,6 +8,8 @@
       ]
     },
     "composite": false,
+    "declaration": false,
+    "declarationMap": false,
     "noEmit": true,
     "jsx": "preserve"
   },

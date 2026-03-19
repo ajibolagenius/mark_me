@@ -1,23 +1,21 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Atmosphere, SkipLink } from "@markme/ui";
 import { useAuthStore } from "@/stores/auth-store";
+import { Atmosphere, SkipLink } from "@markme/ui";
+import { useSession } from "next-auth/react";
+import type { ReactNode } from "react";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  const { status } = useSession();
   const user = useAuthStore((s) => s.user);
-  const router = useRouter();
 
-  useEffect(() => {
-    if (!user) router.replace("/login");
-  }, [user, router]);
+  if (status === "loading" || (status === "authenticated" && !user)) {
+    return null;
+  }
 
-  if (!user) return null;
+  if (status === "unauthenticated" || !user) {
+    return null;
+  }
 
   return (
     <div className="relative min-h-screen bg-mm-bg font-sans text-mm-text">
