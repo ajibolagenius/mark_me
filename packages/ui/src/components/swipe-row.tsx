@@ -68,7 +68,7 @@ export function SwipeRow({ onSwipeDelete, children }: SwipeRowProps) {
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        className="relative z-[1] bg-mm-bg-el"
+        className="relative z-1 bg-mm-bg-el"
         style={{
           transform: `translateX(${offset}px)`,
           transition: offset === 0 || offset === -160 ? "transform 0.25s cubic-bezier(0.4,0,0.2,1)" : "none",

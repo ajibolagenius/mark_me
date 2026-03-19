@@ -1,0 +1,36 @@
+{
+  "name": "@markme/extension",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "type-check": "tsc --noEmit",
+    "lint": "biome check src/"
+  },
+  "dependencies": {
+    "@markme/ui": "workspace:*",
+    "@tanstack/react-query": "^5.80.7",
+    "@trpc/client": "^11.13.4",
+    "@trpc/react-query": "^11.13.4",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "superjson": "^2.2.6",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@markme/api": "workspace:*",
+    "@markme/config": "workspace:*",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/chrome": "^0.0.325",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.5.2",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -38,7 +38,7 @@ export function LinkPreview({ url, title, children }: LinkPreviewProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.15 }}
-            className="pointer-events-none fixed z-[800] w-[240px] border border-mm-border bg-mm-bg-panel p-3 shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
+            className="pointer-events-none fixed z-800 w-[240px] border border-mm-border bg-mm-bg-panel p-3 shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
             style={{
               left: Math.min(pos.x, (typeof window !== "undefined" ? window.innerWidth : 1024) - 260),
               top: pos.y,

@@ -83,7 +83,7 @@ export function Modal({ open, onClose, title, children, wide }: ModalProps) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           className={[
-            "fixed inset-0 z-[1000] flex backdrop-blur-[12px]",
+            "fixed inset-0 z-1000 flex backdrop-blur-md",
             isMobile
               ? "flex-col justify-end bg-black/50"
               : "items-center justify-center bg-black/60 p-4",

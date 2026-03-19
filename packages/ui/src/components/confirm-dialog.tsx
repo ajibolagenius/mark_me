@@ -97,7 +97,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, itemNa
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           className={[
-            "fixed inset-0 z-[1100] flex justify-center backdrop-blur-[12px]",
+            "fixed inset-0 z-1100 flex justify-center backdrop-blur-md",
             isMobile ? "items-end bg-black/65 p-0" : "items-center bg-black/65 p-4",
           ].join(" ")}
           onClick={onClose}

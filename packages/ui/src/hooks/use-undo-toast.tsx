@@ -67,7 +67,7 @@ export function useUndoToast() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.2 }}
-          className="fixed bottom-5 left-1/2 z-[2000] min-w-[260px] max-w-[90vw] -translate-x-1/2 overflow-hidden border border-mm-border bg-mm-bg-el shadow-[6px_6px_0_rgba(0,0,0,0.5)]"
+          className="fixed bottom-5 left-1/2 z-2000 min-w-[260px] max-w-[90vw] -translate-x-1/2 overflow-hidden border border-mm-border bg-mm-bg-el shadow-[6px_6px_0_rgba(0,0,0,0.5)]"
         >
           {toast.onUndo && (
             <div
