@@ -35,3 +35,6 @@ pnpm-debug.log*
 .cursor
 data
 *.local
+apps/current/package-lock.json
+apps/current/dist/
+apps/current/node_modules/
