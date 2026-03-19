@@ -1,5 +1,5 @@
+@import "tailwindcss";
 @import "@markme/ui/styles";
 
-@theme {
-  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
-}
+/* Scan @markme/ui component files so their Tailwind classes are generated */
+@source "../../../packages/ui/src";
