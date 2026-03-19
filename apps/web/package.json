@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
+    "@markme/ai": "workspace:*",
     "@markme/api": "workspace:*",
     "@markme/db": "workspace:*",
     "@markme/ui": "workspace:*",

@@ -1,7 +1,11 @@
 {
   "extends": "@markme/config/typescript/base.json",
   "compilerOptions": {
-    "outDir": "dist"
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": false,
+    "lib": ["ESNext"]
   },
   "include": ["src"]
 }

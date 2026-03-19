@@ -12,7 +12,10 @@
     "lint": "biome check src/",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "zod": "^3.25.76"
+  },
   "devDependencies": {
     "@markme/config": "workspace:*",
     "typescript": "^5.8.3"

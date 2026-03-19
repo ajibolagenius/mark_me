@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { getPostgresConnectionOptions } from "./postgres-connection-options";
 import { users } from "./schema/users";
 import { categories } from "./schema/categories";
 import { bookmarks } from "./schema/bookmarks";
@@ -11,7 +12,7 @@ if (!connectionString) {
   process.exit(1);
 }
 
-const client = postgres(connectionString);
+const client = postgres(connectionString, getPostgresConnectionOptions(connectionString));
 const db = drizzle(client);
 
 const now = Date.now();
