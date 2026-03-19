@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles": "./src/styles/tokens.css"
   },
   "scripts": {
     "build": "tsc --build",
@@ -12,9 +13,19 @@
     "lint": "biome check src/",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "@markme/config": "workspace:*",
-    "typescript": "^5.8.3"
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3"
   }
 }
