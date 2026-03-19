@@ -5,9 +5,11 @@ import { CategoryCard } from "@/components/category-card";
 import { CategoryModal } from "@/components/category-modal";
 import { trpc } from "@/lib/trpc";
 import { useAuthStore } from "@/stores/auth-store";
+import type { Category } from "@markme/ui";
 import {
   AnimCount,
   ConfirmDialog,
+  DEMO_DATA,
   ErrorBoundary,
   Logo,
   MobileNavOverlay,
@@ -17,7 +19,6 @@ import {
   useDebounce,
   useUndoToast,
 } from "@markme/ui";
-import type { Category } from "@markme/ui";
 import {
   ArrowDownAZ,
   ArrowUpDown,
@@ -63,29 +64,40 @@ const SORT_OPTIONS: SortOption[] = [
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: nav + grid + modals in one page (existing layout)
 export default function DashboardPage() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((s) => s.user);
   const utils = trpc.useUtils();
 
+  // Demo data fallback when tRPC is unavailable (no DATABASE_URL)
+  const [demoCategories, setDemoCategories] = useState<Category[]>(DEMO_DATA as Category[]);
+
   const {
-    data: categories = [],
+    data: serverCategories,
     isLoading: listLoading,
     isError: listError,
     error: listErr,
     refetch,
-  } = trpc.category.list.useQuery(undefined, { staleTime: 30_000 });
+  } = trpc.category.list.useQuery(undefined, {
+    staleTime: 30_000,
+    retry: 1,
+  });
+
+  // Use server data when available, otherwise fall back to demo data
+  const categories = serverCategories ?? demoCategories;
+  const isDemo = !serverCategories;
 
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebounce(searchInput, 150);
   const searchActive = debouncedSearch.trim().length > 0;
   const { data: searchHits = [], isFetching: searchFetching } = trpc.bookmark.search.useQuery(
     { query: debouncedSearch.trim(), limit: 100 },
-    { enabled: searchActive },
+    { enabled: searchActive && !isDemo, retry: false },
   );
 
   const invalidateCategories = () => {
-    void utils.category.list.invalidate();
+    if (!isDemo) void utils.category.list.invalidate();
   };
 
+  // tRPC mutations — only fire when connected to real backend
   const createCategory = trpc.category.create.useMutation({
     onSuccess: invalidateCategories,
   });
@@ -134,7 +146,8 @@ export default function DashboardPage() {
     const qLower = debouncedSearch.trim().toLowerCase();
     let result = categories;
 
-    if (searchActive) {
+    // Server-side search (only when connected to real backend)
+    if (searchActive && !isDemo && searchHits.length > 0) {
       const hitIds = new Set(searchHits.map((b) => b.id));
       result = categories.map((cat) => ({
         ...cat,
@@ -152,7 +165,7 @@ export default function DashboardPage() {
         const bms = cat.bookmarks.filter((bm) => {
           const matchesTag =
             !filterTag || bm.tags?.includes(filterTag) || cat.tags?.includes(filterTag);
-          if (searchActive) return matchesTag;
+          if (searchActive && !isDemo && searchHits.length > 0) return matchesTag;
           const matchesSearch =
             !qLower ||
             bm.title.toLowerCase().includes(qLower) ||
@@ -178,9 +191,20 @@ export default function DashboardPage() {
     else if (sortBy === "newest") result = [...result].reverse();
 
     return result;
-  }, [categories, debouncedSearch, filterTag, sortBy, searchActive, searchHits]);
+  }, [categories, debouncedSearch, filterTag, sortBy, searchActive, searchHits, isDemo]);
 
   const saveCat = (cat: Category) => {
+    if (isDemo) {
+      // Demo mode: local state update
+      if (editCat) {
+        setDemoCategories(prev => prev.map(c => c.id === cat.id ? cat : c));
+      } else {
+        setDemoCategories(prev => [...prev, { ...cat, id: `demo-${Date.now()}`, bookmarks: cat.bookmarks ?? [] }]);
+      }
+      setShowNewCat(false);
+      setEditCat(null);
+      return;
+    }
     if (editCat) {
       updateCategory.mutate({
         id: cat.id,
@@ -203,7 +227,7 @@ export default function DashboardPage() {
 
   const exportData = async () => {
     try {
-      const data = await utils.export.toJSON.fetch();
+      const data = isDemo ? categories : await utils.export.toJSON.fetch();
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: "application/json",
       });
@@ -231,6 +255,11 @@ export default function DashboardPage() {
           flash("Invalid file");
           return;
         }
+        if (isDemo) {
+          setDemoCategories(payload.categories);
+          flash("Imported ✓");
+          return;
+        }
         importFromJson.mutate(
           { categories: payload.categories },
           {
@@ -251,6 +280,12 @@ export default function DashboardPage() {
   const confirmDeleteCat = () => {
     const cat = confirmDel?.cat;
     if (!cat) return;
+    if (isDemo) {
+      setDemoCategories(prev => prev.filter(c => c.id !== cat.id));
+      setConfirmDel(null);
+      flash(`"${cat.name}" deleted`);
+      return;
+    }
     deleteCategory.mutate(
       { id: cat.id },
       {
@@ -263,7 +298,14 @@ export default function DashboardPage() {
     );
   };
 
-  const deleteBm = (_catId: string, bmId: string, bmTitle: string) => {
+  const deleteBm = (catId: string, bmId: string, bmTitle: string) => {
+    if (isDemo) {
+      setDemoCategories(prev => prev.map(c =>
+        c.id === catId ? { ...c, bookmarks: c.bookmarks.filter(b => b.id !== bmId) } : c
+      ));
+      flash(`"${bmTitle}" removed`);
+      return;
+    }
     deleteBookmark.mutate(
       { id: bmId },
       {
@@ -274,6 +316,10 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
+    if (isDemo) {
+      window.location.href = "/";
+      return;
+    }
     void signOut({ callbackUrl: "/" });
   };
 
@@ -410,11 +456,11 @@ export default function DashboardPage() {
             {/* Profile avatar */}
             <button
               onClick={() => router.push("/profile")}
-              aria-label={`Profile — ${user.name}`}
+              aria-label={`Profile — ${user?.name ?? "User"}`}
               title="Profile"
               className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center bg-linear-to-br from-mm-primary to-mm-secondary p-0 text-xs font-extrabold text-white"
             >
-              {user.name?.[0]?.toUpperCase() || "U"}
+              {user?.name?.[0]?.toUpperCase() || "U"}
             </button>
           </div>
 

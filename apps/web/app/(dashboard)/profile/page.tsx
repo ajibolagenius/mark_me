@@ -2,7 +2,8 @@
 
 import { trpc } from "@/lib/trpc";
 import { useAuthStore } from "@/stores/auth-store";
-import { ACCENTS, AnimCount, Field, Logo, useUndoToast } from "@markme/ui";
+import { ACCENTS, AnimCount, DEMO_DATA, Field, Logo, useUndoToast } from "@markme/ui";
+import type { Category } from "@markme/ui";
 import {
   Bookmark,
   Calendar,
@@ -25,21 +26,24 @@ import { useEffect, useMemo, useState } from "react";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
 
-  const { data: me, isLoading: meLoading } = trpc.user.me.useQuery();
-  const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
+  const { data: me } = trpc.user.me.useQuery(undefined, { retry: false });
+  const { data: serverCategories } = trpc.category.list.useQuery(undefined, {
     staleTime: 30_000,
+    retry: false,
   });
+  const categories = serverCategories ?? (DEMO_DATA as Category[]);
+
   const updateProfile = trpc.user.updateProfile.useMutation({
     onSuccess: (row) => {
       updateUser({ name: row.name, email: row.email });
     },
   });
 
-  const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [name, setName] = useState(user?.name ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
   const [saved, setSaved] = useState(false);
   const { flash, ToastEl } = useUndoToast();
 
@@ -60,10 +64,19 @@ export default function ProfilePage() {
     [categories],
   );
 
-  const displayPlan = me?.plan ?? user.plan;
-  const joinedLabel = me?.createdAt ? new Date(me.createdAt).toLocaleDateString() : user.joinedAt;
+  const displayPlan = me?.plan ?? user?.plan ?? "free";
+  const joinedLabel = me?.createdAt ? new Date(me.createdAt).toLocaleDateString() : user?.joinedAt ?? new Date().toISOString();
+
+  const isDemo = !serverCategories;
 
   const save = () => {
+    if (isDemo) {
+      updateUser({ name, email });
+      setSaved(true);
+      flash("Profile updated ✓");
+      setTimeout(() => setSaved(false), 2000);
+      return;
+    }
     updateProfile.mutate(
       { name, email },
       {
@@ -78,6 +91,10 @@ export default function ProfilePage() {
   };
 
   const handleLogout = () => {
+    if (isDemo) {
+      window.location.href = "/";
+      return;
+    }
     void signOut({ callbackUrl: "/" });
   };
 
@@ -106,7 +123,7 @@ export default function ProfilePage() {
     },
   ];
 
-  const initial = (me?.name ?? name ?? user.name)?.[0]?.toUpperCase() ?? "U";
+  const initial = (me?.name ?? name ?? user?.name)?.[0]?.toUpperCase() ?? "U";
 
   if (meLoading && !me) {
     return (

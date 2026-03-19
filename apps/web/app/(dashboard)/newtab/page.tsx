@@ -1,15 +1,18 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
-import { ACCENTS, FaviconWithFallback, Highlight, getDomain, timeAgo } from "@markme/ui";
+import { ACCENTS, DEMO_DATA, FaviconWithFallback, Highlight, getDomain, timeAgo } from "@markme/ui";
+import type { Category } from "@markme/ui";
 import { ArrowRight, Chrome, Clock, Pin, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function NewTabPage() {
-  const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
+  const { data: serverCategories } = trpc.category.list.useQuery(undefined, {
     staleTime: 30_000,
+    retry: false,
   });
+  const categories = serverCategories ?? (DEMO_DATA as Category[]);
   const [time, setTime] = useState(new Date());
   const [ntSearch, setNtSearch] = useState("");
 

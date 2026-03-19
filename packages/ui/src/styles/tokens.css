@@ -26,12 +26,25 @@
   --color-mm-warning: #F59E0B;
 
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+
+  /* Hard offset shadows — mark_me brand */
+  --shadow-mm-sm: 2px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-mm: 4px 4px 0 rgba(0, 0, 0, 0.4);
+  --shadow-mm-lg: 6px 6px 0 rgba(0, 0, 0, 0.4);
+  --shadow-mm-xl: 8px 8px 0 rgba(0, 0, 0, 0.5);
 }
 
+/* ── Global reset — sharp corners are the brand ── */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
 }
 
 body {
@@ -40,6 +53,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 4px;
 }
@@ -50,6 +64,31 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Focus rings ── */
+*:focus-visible {
+  outline: 2px solid var(--color-mm-primary);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-mm-primary) !important;
+}
+
+/* ── Buttons — cursor + no default rounding ── */
+button {
+  cursor: pointer;
+  border-radius: 0;
+}
+
+/* ── Links — no underline by default ── */
+a {
+  text-decoration: none;
+  color: inherit;
 }
 
 @keyframes mmFadeIn {
