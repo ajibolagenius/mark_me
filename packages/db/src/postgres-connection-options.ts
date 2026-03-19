@@ -1,10 +1,10 @@
 import type { Options } from "postgres";
 
-function tryParseHostname(url: string): string | null {
+function tryParseUrl(url: string): URL | null {
   try {
     const withProtocol = /^postgres(ql)?:\/\//i.test(url) ? url : `postgresql://${url}`;
-    const forUrl = withProtocol.replace(/^postgres(ql)?:\/\//i, "http://");
-    return new URL(forUrl).hostname;
+    const asHttp = withProtocol.replace(/^postgres(ql)?:\/\//i, "http://");
+    return new URL(asHttp);
   } catch {
     return null;
   }
@@ -25,8 +25,19 @@ function looksLikeCloudPostgres(host: string): boolean {
 }
 
 /**
- * Options for `postgres(url, opts)` so cloud Postgres (TLS required) works without
- * changing the connection string. Override with DATABASE_SSL=require|disable.
+ * Returns true when the URL targets Supabase's pgBouncer pooler in
+ * transaction mode (port 6543 or hostname contains "pooler.supabase.com").
+ * In that mode postgres-js must NOT use server-side prepared statements.
+ */
+function looksLikeSupabasePooler(parsed: URL): boolean {
+  const h = parsed.hostname.toLowerCase();
+  return h.includes("pooler.supabase.com") || parsed.port === "6543";
+}
+
+/**
+ * Options for `postgres(url, opts)` so cloud Postgres (TLS required) and
+ * Supabase's pgBouncer pooler (prepare: false) work without changing the
+ * connection string. Override SSL with DATABASE_SSL=require|disable.
  */
 export function getPostgresConnectionOptions(
   connectionString: string,
@@ -36,18 +47,25 @@ export function getPostgresConnectionOptions(
     return {};
   }
 
-  const env = process.env.DATABASE_SSL?.trim().toLowerCase();
-  if (env === "require" || env === "true" || env === "1") {
-    return { ssl: "require" };
-  }
-  if (env === "disable" || env === "false" || env === "0") {
-    return {};
+  const parsed = tryParseUrl(connectionString);
+  const host = parsed?.hostname ?? null;
+
+  const sslEnv = process.env.DATABASE_SSL?.trim().toLowerCase();
+  let ssl: Options<Record<string, never>>["ssl"];
+
+  if (sslEnv === "require" || sslEnv === "true" || sslEnv === "1") {
+    ssl = "require";
+  } else if (sslEnv === "disable" || sslEnv === "false" || sslEnv === "0") {
+    ssl = undefined;
+  } else if (host && looksLikeCloudPostgres(host)) {
+    ssl = "require";
   }
 
-  const host = tryParseHostname(connectionString);
-  if (host && looksLikeCloudPostgres(host)) {
-    return { ssl: "require" };
-  }
+  // pgBouncer transaction mode does not support prepared statements
+  const prepare = parsed && looksLikeSupabasePooler(parsed) ? false : undefined;
 
-  return {};
+  return {
+    ...(ssl !== undefined && { ssl }),
+    ...(prepare !== undefined && { prepare }),
+  };
 }
