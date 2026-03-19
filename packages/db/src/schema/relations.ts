@@ -3,6 +3,7 @@ import { users } from "./users";
 import { categories } from "./categories";
 import { bookmarks } from "./bookmarks";
 import { sessions } from "./sessions";
+import { accounts } from "./accounts";
 import { aiUsage } from "./ai-usage";
 import { subscriptions } from "./subscriptions";
 
@@ -10,6 +11,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   categories: many(categories),
   bookmarks: many(bookmarks),
   sessions: many(sessions),
+  accounts: many(accounts),
   aiUsage: many(aiUsage),
   subscription: one(subscriptions, {
     fields: [users.id],
@@ -39,6 +41,13 @@ export const bookmarksRelations = relations(bookmarks, ({ one }) => ({
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, {
     fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
     references: [users.id],
   }),
 }));

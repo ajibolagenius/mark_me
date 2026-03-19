@@ -12,7 +12,9 @@ export const users = pgTable("users", {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   email: text("email").notNull().unique(),
-  name: text("name").notNull(),
+  name: text("name").notNull().default(""),
+  emailVerified: timestamp("email_verified", { withTimezone: true, mode: "date" }),
+  image: text("image"),
   avatarUrl: text("avatar_url"),
   plan: planEnum("plan").notNull().default("free"),
   createdAt: timestamp("created_at", { withTimezone: true })

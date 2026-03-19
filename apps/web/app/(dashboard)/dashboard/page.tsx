@@ -17,6 +17,7 @@ import {
   Hash,
   Clock,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
 import {
   Logo,
   Tag,
@@ -62,7 +63,6 @@ const SORT_OPTIONS: SortOption[] = [
 export default function DashboardPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user)!;
-  const logout = useAuthStore((s) => s.logout);
   const categories = useCategoriesStore((s) => s.categories);
   const setCategories = useCategoriesStore((s) => s.setCategories);
 
@@ -201,8 +201,7 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
-    logout();
-    router.push("/");
+    void signOut({ callbackUrl: "/" });
   };
 
   const totalBm = categories.reduce(

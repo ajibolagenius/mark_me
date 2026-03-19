@@ -1,13 +1,11 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
-export const sessions = pgTable("sessions", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
+/** Auth.js / NextAuth database session rows (table name `session`). */
+export const sessions = pgTable("session", {
+  sessionToken: text("session_token").primaryKey(),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
 });

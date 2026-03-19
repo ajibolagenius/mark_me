@@ -18,6 +18,7 @@ import {
   Calendar,
   Shield,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { Logo, Field, AnimCount, useUndoToast, ACCENTS } from "@markme/ui";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCategoriesStore } from "@/stores/categories-store";
@@ -26,7 +27,6 @@ export default function ProfilePage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user)!;
   const updateUser = useAuthStore((s) => s.updateUser);
-  const logout = useAuthStore((s) => s.logout);
   const categories = useCategoriesStore((s) => s.categories);
 
   const [name, setName] = useState(user.name);
@@ -52,8 +52,7 @@ export default function ProfilePage() {
   };
 
   const handleLogout = () => {
-    logout();
-    router.push("/");
+    void signOut({ callbackUrl: "/" });
   };
 
   const plans = [
