@@ -2,26 +2,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "../lib/globals.css";
+import type { AuthState } from "../lib/storage";
 import { useExtensionAuth } from "../lib/hooks";
 import { createExtensionTrpcClient, trpcReact } from "../lib/trpc";
 import { Popup } from "./Popup";
 
-function App() {
-  const auth = useExtensionAuth();
-
-  const [trpcClient] = useState(() =>
-    createExtensionTrpcClient(typeof auth === "object" && auth ? auth.token : null),
-  );
+/**
+ * Mounted only after auth has resolved from chrome.storage.
+ * `useState` here fires once with the real token, not null.
+ */
+function AuthenticatedProviders({ token, auth }: { token: string | null; auth: AuthState | false }) {
+  const [trpcClient] = useState(() => createExtensionTrpcClient(token));
   const [queryClient] = useState(() => new QueryClient());
-
-  if (auth === null) {
-    // Still loading from storage
-    return (
-      <div className="flex h-[200px] w-[280px] items-center justify-center bg-mm-bg">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-mm-border border-t-mm-primary" />
-      </div>
-    );
-  }
 
   return (
     <trpcReact.Provider client={trpcClient} queryClient={queryClient}>
@@ -30,6 +22,21 @@ function App() {
       </QueryClientProvider>
     </trpcReact.Provider>
   );
+}
+
+function App() {
+  const auth = useExtensionAuth();
+
+  // auth === null means storage is still being read — hold off mounting providers
+  if (auth === null) {
+    return (
+      <div className="flex h-[200px] w-[280px] items-center justify-center bg-mm-bg">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-mm-border border-t-mm-primary" />
+      </div>
+    );
+  }
+
+  return <AuthenticatedProviders token={auth ? auth.token : null} auth={auth} />;
 }
 
 const el = document.getElementById("root");
