@@ -1,0 +1,5 @@
+@import "@markme/ui/styles";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+}
