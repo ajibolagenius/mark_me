@@ -1,8 +1,4 @@
-import NextAuth from "next-auth";
-import { authConfig } from "./auth.config";
-
-export default NextAuth(authConfig).auth;
-
-export const config = {
-  matcher: ["/dashboard/:path*", "/profile/:path*", "/newtab", "/newtab/:path*"],
-};
+// Middleware disabled — the artifact handles routing internally via React state.
+// API routes (/api/*) are excluded from the catch-all page and work independently.
+export { };
+export const config = { matcher: [] };
