@@ -7,6 +7,7 @@ export type BookmarkRow = InferSelectModel<typeof bookmarks>;
 export function mapBookmark(b: BookmarkRow) {
   return {
     id: b.id,
+    categoryId: b.categoryId,
     title: b.title,
     url: b.url,
     note: b.note ?? undefined,

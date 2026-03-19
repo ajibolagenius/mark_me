@@ -1,5 +1,7 @@
 export interface Bookmark {
   id: string;
+  /** Present when data comes from the API (e.g. search grouping). */
+  categoryId?: string;
   title: string;
   url: string;
   tags: string[];
