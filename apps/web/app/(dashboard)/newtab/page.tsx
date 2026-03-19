@@ -1,19 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { trpc } from "@/lib/trpc";
+import { ACCENTS, FaviconWithFallback, Highlight, getDomain, timeAgo } from "@markme/ui";
+import { ArrowRight, Chrome, Clock, Pin, Search, X } from "lucide-react";
 import Link from "next/link";
-import { Chrome, Search, X, Pin, Clock, ArrowRight } from "lucide-react";
-import {
-  ACCENTS,
-  FaviconWithFallback,
-  Highlight,
-  getDomain,
-  timeAgo,
-} from "@markme/ui";
-import { useCategoriesStore } from "@/stores/categories-store";
+import { useEffect, useState } from "react";
 
 export default function NewTabPage() {
-  const categories = useCategoriesStore((s) => s.categories);
+  const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
+    staleTime: 30_000,
+  });
   const [time, setTime] = useState(new Date());
   const [ntSearch, setNtSearch] = useState("");
 
@@ -45,9 +41,7 @@ export default function NewTabPage() {
     })),
   );
   const pinned = allBm.filter((b) => b.pinned);
-  const recent = [...allBm]
-    .sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0))
-    .slice(0, 8);
+  const recent = [...allBm].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 8);
   const searchResults = ntSearch
     ? allBm.filter(
         (b) =>
@@ -118,11 +112,7 @@ export default function NewTabPage() {
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 border-b border-mm-border px-4 py-3 transition-colors last:border-b-0 hover:bg-mm-bg-panel"
                   >
-                    <FaviconWithFallback
-                      url={b.url}
-                      title={b.title}
-                      size={18}
-                    />
+                    <FaviconWithFallback url={b.url} title={b.title} size={18} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-semibold text-mm-text">
                         <Highlight text={b.title} query={ntSearch} />
@@ -167,16 +157,9 @@ export default function NewTabPage() {
                   rel="noopener noreferrer"
                   className="group border border-mm-border bg-mm-bg-el px-4 py-3.5 transition-colors hover:bg-mm-bg-panel"
                 >
-                  <div
-                    className="mb-0.5 h-[2px] w-6"
-                    style={{ background: accent.bg }}
-                  />
+                  <div className="mb-0.5 h-[2px] w-6" style={{ background: accent.bg }} />
                   <div className="mt-2.5 flex items-center gap-2">
-                    <FaviconWithFallback
-                      url={b.url}
-                      title={b.title}
-                      size={16}
-                    />
+                    <FaviconWithFallback url={b.url} title={b.title} size={16} />
                     <span className="truncate text-[13px] font-semibold text-mm-text transition-colors group-hover:text-mm-primary">
                       {b.title}
                     </span>
@@ -213,15 +196,9 @@ export default function NewTabPage() {
                     i < recent.length - 1 ? "border-b border-mm-border" : "",
                   ].join(" ")}
                 >
-                  <FaviconWithFallback
-                    url={b.url}
-                    title={b.title}
-                    size={16}
-                  />
+                  <FaviconWithFallback url={b.url} title={b.title} size={16} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-semibold text-mm-text">
-                      {b.title}
-                    </div>
+                    <div className="truncate text-[13px] font-semibold text-mm-text">{b.title}</div>
                     <div className="truncate text-[11px] text-mm-text-muted">
                       {getDomain(b.url)}
                     </div>
@@ -254,12 +231,9 @@ export default function NewTabPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-mm-primary/15 bg-mm-primary-subtle text-mm-primary">
             <Chrome size={24} />
           </div>
-          <h2 className="mb-2 text-[18px] font-extrabold text-mm-text">
-            No bookmarks yet
-          </h2>
+          <h2 className="mb-2 text-[18px] font-extrabold text-mm-text">No bookmarks yet</h2>
           <p className="mx-auto mb-6 max-w-[340px] text-[14px] text-mm-text-sec">
-            Head to your dashboard to create categories and start saving
-            bookmarks.
+            Head to your dashboard to create categories and start saving bookmarks.
           </p>
           <Link
             href="/dashboard"

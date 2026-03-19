@@ -1,41 +1,41 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { AiPanel } from "@/components/ai-panel";
+import { CategoryCard } from "@/components/category-card";
+import { CategoryModal } from "@/components/category-modal";
+import { trpc } from "@/lib/trpc";
+import { useAuthStore } from "@/stores/auth-store";
 import {
-  Search,
-  X,
-  Download,
-  Upload,
-  Sparkles,
-  Plus,
-  Menu,
-  User,
-  LogOut,
-  ArrowUpDown,
-  ArrowDownAZ,
-  Hash,
-  Clock,
-} from "lucide-react";
-import { signOut } from "next-auth/react";
-import {
-  Logo,
-  Tag,
   AnimCount,
-  ErrorBoundary,
-  VirtualMasonry,
   ConfirmDialog,
-  PullToRefresh,
+  ErrorBoundary,
+  Logo,
   MobileNavOverlay,
+  PullToRefresh,
+  Tag,
+  VirtualMasonry,
   useDebounce,
   useUndoToast,
 } from "@markme/ui";
 import type { Category } from "@markme/ui";
-import { CategoryCard } from "@/components/category-card";
-import { CategoryModal } from "@/components/category-modal";
-import { AiPanel } from "@/components/ai-panel";
-import { useAuthStore } from "@/stores/auth-store";
-import { useCategoriesStore } from "@/stores/categories-store";
+import {
+  ArrowDownAZ,
+  ArrowUpDown,
+  Clock,
+  Download,
+  Hash,
+  LogOut,
+  Menu,
+  Plus,
+  Search,
+  Sparkles,
+  Upload,
+  User,
+  X,
+} from "lucide-react";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 
 type SortKey = "default" | "az" | "za" | "most" | "least" | "newest";
 
@@ -60,14 +60,56 @@ const SORT_OPTIONS: SortOption[] = [
   { id: "newest", label: "Newest", icon: <Clock size={10} /> },
 ];
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: nav + grid + modals in one page (existing layout)
 export default function DashboardPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user)!;
-  const categories = useCategoriesStore((s) => s.categories);
-  const setCategories = useCategoriesStore((s) => s.setCategories);
+  const utils = trpc.useUtils();
+
+  const {
+    data: categories = [],
+    isLoading: listLoading,
+    isError: listError,
+    error: listErr,
+    refetch,
+  } = trpc.category.list.useQuery(undefined, { staleTime: 30_000 });
 
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebounce(searchInput, 150);
+  const searchActive = debouncedSearch.trim().length > 0;
+  const { data: searchHits = [], isFetching: searchFetching } = trpc.bookmark.search.useQuery(
+    { query: debouncedSearch.trim(), limit: 100 },
+    { enabled: searchActive },
+  );
+
+  const invalidateCategories = () => {
+    void utils.category.list.invalidate();
+  };
+
+  const createCategory = trpc.category.create.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const updateCategory = trpc.category.update.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const deleteCategory = trpc.category.delete.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const createBookmark = trpc.bookmark.create.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const updateBookmark = trpc.bookmark.update.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const deleteBookmark = trpc.bookmark.delete.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const togglePinBookmark = trpc.bookmark.togglePin.useMutation({
+    onSuccess: invalidateCategories,
+  });
+  const importFromJson = trpc.export.fromJSON.useMutation({
+    onSuccess: invalidateCategories,
+  });
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [showNewCat, setShowNewCat] = useState(false);
   const [editCat, setEditCat] = useState<Category | null>(null);
@@ -76,35 +118,46 @@ export default function DashboardPage() {
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [showAi, setShowAi] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { flash, flashUndo, ToastEl } = useUndoToast();
-  const isSearching = searchInput !== debouncedSearch;
+  const { flash, ToastEl } = useUndoToast();
+  const isSearching = searchInput !== debouncedSearch || (searchActive && searchFetching);
 
   const allTags = useMemo(
     () => [
       ...new Set(
-        categories.flatMap((c) => [
-          ...(c.tags || []),
-          ...c.bookmarks.flatMap((b) => b.tags || []),
-        ])
+        categories.flatMap((c) => [...(c.tags || []), ...c.bookmarks.flatMap((b) => b.tags || [])]),
       ),
     ],
-    [categories]
+    [categories],
   );
 
   const filtered = useMemo(() => {
-    const q = debouncedSearch;
-    let result = categories
+    const qLower = debouncedSearch.trim().toLowerCase();
+    let result = categories;
+
+    if (searchActive) {
+      const hitIds = new Set(searchHits.map((b) => b.id));
+      result = categories.map((cat) => ({
+        ...cat,
+        bookmarks: cat.bookmarks.filter((b) => hitIds.has(b.id)),
+      }));
+      result = result.filter(
+        (cat) =>
+          cat.bookmarks.length > 0 ||
+          (qLower.length > 0 && cat.name.toLowerCase().includes(qLower)),
+      );
+    }
+
+    result = result
       .map((cat) => {
         const bms = cat.bookmarks.filter((bm) => {
-          const matchesSearch =
-            !q ||
-            bm.title.toLowerCase().includes(q.toLowerCase()) ||
-            bm.url.toLowerCase().includes(q.toLowerCase()) ||
-            bm.note?.toLowerCase().includes(q.toLowerCase());
           const matchesTag =
-            !filterTag ||
-            bm.tags?.includes(filterTag) ||
-            cat.tags?.includes(filterTag);
+            !filterTag || bm.tags?.includes(filterTag) || cat.tags?.includes(filterTag);
+          if (searchActive) return matchesTag;
+          const matchesSearch =
+            !qLower ||
+            bm.title.toLowerCase().includes(qLower) ||
+            bm.url.toLowerCase().includes(qLower) ||
+            bm.note?.toLowerCase().includes(qLower);
           return matchesSearch && matchesTag;
         });
         return { ...cat, bookmarks: bms };
@@ -113,47 +166,57 @@ export default function DashboardPage() {
         (cat) =>
           (filterTag && cat.tags?.includes(filterTag)) ||
           cat.bookmarks.length > 0 ||
-          (!q && !filterTag)
+          (!debouncedSearch.trim() && !filterTag),
       );
 
-    if (sortBy === "az")
-      result = [...result].sort((a, b) => a.name.localeCompare(b.name));
-    else if (sortBy === "za")
-      result = [...result].sort((a, b) => b.name.localeCompare(a.name));
+    if (sortBy === "az") result = [...result].sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortBy === "za") result = [...result].sort((a, b) => b.name.localeCompare(a.name));
     else if (sortBy === "most")
-      result = [...result].sort(
-        (a, b) => b.bookmarks.length - a.bookmarks.length
-      );
+      result = [...result].sort((a, b) => b.bookmarks.length - a.bookmarks.length);
     else if (sortBy === "least")
-      result = [...result].sort(
-        (a, b) => a.bookmarks.length - b.bookmarks.length
-      );
+      result = [...result].sort((a, b) => a.bookmarks.length - b.bookmarks.length);
     else if (sortBy === "newest") result = [...result].reverse();
 
     return result;
-  }, [categories, debouncedSearch, filterTag, sortBy]);
+  }, [categories, debouncedSearch, filterTag, sortBy, searchActive, searchHits]);
 
   const saveCat = (cat: Category) => {
-    if (categories.find((c) => c.id === cat.id)) {
-      setCategories(categories.map((c) => (c.id === cat.id ? cat : c)));
+    if (editCat) {
+      updateCategory.mutate({
+        id: cat.id,
+        name: cat.name,
+        emoji: cat.icon,
+        color: cat.color,
+        tags: cat.tags,
+      });
     } else {
-      setCategories([...categories, cat]);
+      createCategory.mutate({
+        name: cat.name,
+        emoji: cat.icon,
+        color: cat.color,
+        tags: cat.tags,
+      });
     }
     setShowNewCat(false);
     setEditCat(null);
   };
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(categories, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "markme_bookmarks.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    flash("Exported ✓");
+  const exportData = async () => {
+    try {
+      const data = await utils.export.toJSON.fetch();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "markme_bookmarks.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      flash("Exported ✓");
+    } catch {
+      flash("Export failed");
+    }
   };
 
   const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,13 +225,19 @@ export default function DashboardPage() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const data = JSON.parse(
-          (ev.target as FileReader).result as string
-        );
-        if (Array.isArray(data)) {
-          setCategories(data);
-          flash("Imported ✓");
+        const raw = JSON.parse((ev.target as FileReader).result as string);
+        const payload = Array.isArray(raw) ? { categories: raw } : raw;
+        if (!payload?.categories || !Array.isArray(payload.categories)) {
+          flash("Invalid file");
+          return;
         }
+        importFromJson.mutate(
+          { categories: payload.categories },
+          {
+            onSuccess: () => flash("Imported ✓"),
+            onError: () => flash("Import failed"),
+          },
+        );
       } catch {
         flash("Invalid file");
       }
@@ -182,35 +251,36 @@ export default function DashboardPage() {
   const confirmDeleteCat = () => {
     const cat = confirmDel?.cat;
     if (!cat) return;
-    const snapshot = [...categories];
-    setCategories(categories.filter((c) => c.id !== cat.id));
-    setConfirmDel(null);
-    flashUndo(`"${cat.name}" deleted`, () => setCategories(snapshot));
+    deleteCategory.mutate(
+      { id: cat.id },
+      {
+        onSuccess: () => {
+          setConfirmDel(null);
+          flash(`"${cat.name}" deleted`);
+        },
+        onError: () => flash("Couldn't delete category"),
+      },
+    );
   };
 
-  const deleteBm = (catId: string, bmId: string, bmTitle: string) => {
-    const snapshot = [...categories];
-    setCategories(
-      categories.map((c) =>
-        c.id === catId
-          ? { ...c, bookmarks: c.bookmarks.filter((b) => b.id !== bmId) }
-          : c
-      )
+  const deleteBm = (_catId: string, bmId: string, bmTitle: string) => {
+    deleteBookmark.mutate(
+      { id: bmId },
+      {
+        onSuccess: () => flash(`"${bmTitle}" removed`),
+        onError: () => flash("Couldn't remove bookmark"),
+      },
     );
-    flashUndo(`"${bmTitle}" removed`, () => setCategories(snapshot));
   };
 
   const handleLogout = () => {
     void signOut({ callbackUrl: "/" });
   };
 
-  const totalBm = categories.reduce(
-    (acc, c) => acc + c.bookmarks.length,
-    0
-  );
+  const totalBm = categories.reduce((acc, c) => acc + c.bookmarks.length, 0);
   const totalPinned = categories.reduce(
     (acc, c) => acc + c.bookmarks.filter((b) => b.pinned).length,
-    0
+    0,
   );
   const stats: StatItem[] = [
     { label: "CATEGORIES", val: categories.length, colorClass: "bg-mm-primary" },
@@ -219,10 +289,33 @@ export default function DashboardPage() {
     { label: "TAGS", val: allTags.length, colorClass: "bg-mm-success" },
   ];
 
-  const filteredBookmarkCount = filtered.reduce(
-    (acc, c) => acc + c.bookmarks.length,
-    0
-  );
+  const filteredBookmarkCount = filtered.reduce((acc, c) => acc + c.bookmarks.length, 0);
+
+  if (listLoading && categories.length === 0) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center font-sans text-sm text-mm-text-muted">
+        Loading your library…
+      </div>
+    );
+  }
+
+  if (listError) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center font-sans">
+        <p className="mb-2 font-bold text-mm-error">Couldn&apos;t load data</p>
+        <p className="mb-4 text-sm text-mm-text-muted">
+          {listErr?.message ?? "Check DATABASE_URL and sign in again."}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="border border-mm-border bg-mm-bg-input px-4 py-2 text-sm font-bold text-mm-text"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -240,9 +333,7 @@ export default function DashboardPage() {
             <div
               role="search"
               className={`flex min-w-[180px] items-center gap-1.5 border bg-mm-bg-input px-3 py-1.5 transition-colors duration-200 ${
-                searchInput
-                  ? "border-mm-primary/60"
-                  : "border-mm-border"
+                searchInput ? "border-mm-primary/60" : "border-mm-border"
               }`}
             >
               <Search size={14} className="shrink-0 text-mm-text-muted" />
@@ -341,68 +432,65 @@ export default function DashboardPage() {
 
       {/* ─── Mobile nav overlay ─── */}
       <MobileNavOverlay
-          open={mobileNav}
-          onClose={() => setMobileNav(false)}
-          items={[
-            {
-              icon: <Plus size={16} />,
-              label: "New Category",
-              fn: () => {
-                setShowNewCat(true);
-                setMobileNav(false);
-              },
+        open={mobileNav}
+        onClose={() => setMobileNav(false)}
+        items={[
+          {
+            icon: <Plus size={16} />,
+            label: "New Category",
+            fn: () => {
+              setShowNewCat(true);
+              setMobileNav(false);
             },
-            {
-              icon: <Sparkles size={16} />,
-              label: "AI Assistant",
-              fn: () => {
-                setShowAi(true);
-                setMobileNav(false);
-              },
+          },
+          {
+            icon: <Sparkles size={16} />,
+            label: "AI Assistant",
+            fn: () => {
+              setShowAi(true);
+              setMobileNav(false);
             },
-            {
-              icon: <Download size={16} />,
-              label: "Export",
-              fn: () => {
-                exportData();
-                setMobileNav(false);
-              },
+          },
+          {
+            icon: <Download size={16} />,
+            label: "Export",
+            fn: () => {
+              exportData();
+              setMobileNav(false);
             },
-            {
-              icon: <Upload size={16} />,
-              label: "Import",
-              fn: () => {
-                fileRef.current?.click();
-                setMobileNav(false);
-              },
+          },
+          {
+            icon: <Upload size={16} />,
+            label: "Import",
+            fn: () => {
+              fileRef.current?.click();
+              setMobileNav(false);
             },
-            {
-              icon: <User size={16} />,
-              label: "Profile",
-              fn: () => {
-                router.push("/profile");
-                setMobileNav(false);
-              },
+          },
+          {
+            icon: <User size={16} />,
+            label: "Profile",
+            fn: () => {
+              router.push("/profile");
+              setMobileNav(false);
             },
-            {
-              icon: <LogOut size={16} />,
-              label: "Log out",
-              fn: () => {
-                handleLogout();
-                setMobileNav(false);
-              },
+          },
+          {
+            icon: <LogOut size={16} />,
+            label: "Log out",
+            fn: () => {
+              handleLogout();
+              setMobileNav(false);
             },
-          ]}
-        />
+          },
+        ]}
+      />
 
       {/* ─── Main content ─── */}
-      <main
-        id="main-content"
-        className="relative z-1 mx-auto max-w-[1100px] px-4 pb-[60px] pt-4"
-      >
+      <main id="main-content" className="relative z-1 mx-auto max-w-[1100px] px-4 pb-[60px] pt-4">
         <PullToRefresh
-          onRefresh={() => {
-            setCategories([...categories]);
+          onRefresh={async () => {
+            await refetch();
             flash("Refreshed ✓");
           }}
         >
@@ -411,9 +499,7 @@ export default function DashboardPage() {
             <div
               role="search"
               className={`flex items-center gap-1.5 border bg-mm-bg-input px-3 py-2 transition-colors duration-200 ${
-                searchInput
-                  ? "border-mm-primary/60"
-                  : "border-mm-border"
+                searchInput ? "border-mm-primary/60" : "border-mm-border"
               }`}
             >
               <Search size={14} className="shrink-0 text-mm-text-muted" />
@@ -472,21 +558,14 @@ export default function DashboardPage() {
               <span className="mr-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wider text-mm-text-muted">
                 Filter
               </span>
-              <Tag
-                tag="ALL"
-                small
-                active={!filterTag}
-                onClick={() => setFilterTag(null)}
-              />
+              <Tag tag="ALL" small active={!filterTag} onClick={() => setFilterTag(null)} />
               {allTags.map((t) => (
                 <Tag
                   key={t}
                   tag={t}
                   small
                   active={filterTag === t}
-                  onClick={() =>
-                    setFilterTag(filterTag === t ? null : t)
-                  }
+                  onClick={() => setFilterTag(filterTag === t ? null : t)}
                 />
               ))}
             </div>
@@ -538,14 +617,28 @@ export default function DashboardPage() {
                   cat={cat}
                   allTags={allTags}
                   searchQuery={debouncedSearch}
-                  onUpdate={(c) =>
-                    setCategories(
-                      categories.map((x) => (x.id === c.id ? c : x))
-                    )
-                  }
+                  onEdit={(c) => setEditCat(c)}
                   onDelete={requestDeleteCat}
                   onDeleteBm={deleteBm}
-                  onEdit={(c) => setEditCat(c)}
+                  onAddBookmark={(categoryId, data) => {
+                    createBookmark.mutate({
+                      categoryId,
+                      title: data.title,
+                      url: data.url,
+                      note: data.note,
+                      tags: data.tags,
+                    });
+                  }}
+                  onUpdateBookmark={(_categoryId, bookmarkId, data) => {
+                    updateBookmark.mutate({
+                      id: bookmarkId,
+                      title: data.title,
+                      url: data.url,
+                      note: data.note ?? null,
+                      tags: data.tags,
+                    });
+                  }}
+                  onTogglePinBookmark={(id) => togglePinBookmark.mutate({ id })}
                 />
               )}
             />
@@ -556,9 +649,7 @@ export default function DashboardPage() {
             <div className="px-5 py-20 text-center">
               <div className="mb-3 text-[40px] opacity-40">🔍</div>
               <p className="mb-1.5 text-base font-bold text-mm-text-sec">
-                {debouncedSearch || filterTag
-                  ? "No matches"
-                  : "No categories yet"}
+                {debouncedSearch || filterTag ? "No matches" : "No categories yet"}
               </p>
               <p className="text-[13px] text-mm-text-muted">
                 {debouncedSearch || filterTag
@@ -580,11 +671,7 @@ export default function DashboardPage() {
       </button>
 
       {/* ─── Modals & panels ─── */}
-      <CategoryModal
-        open={showNewCat}
-        onClose={() => setShowNewCat(false)}
-        onSave={saveCat}
-      />
+      <CategoryModal open={showNewCat} onClose={() => setShowNewCat(false)} onSave={saveCat} />
       <CategoryModal
         open={!!editCat}
         onClose={() => setEditCat(null)}
@@ -599,11 +686,7 @@ export default function DashboardPage() {
         itemName={confirmDel?.cat?.name}
         count={confirmDel?.cat?.bookmarks?.length || 0}
       />
-      <AiPanel
-        open={showAi}
-        onClose={() => setShowAi(false)}
-        categories={categories}
-      />
+      <AiPanel open={showAi} onClose={() => setShowAi(false)} categories={categories} />
       {ToastEl}
     </>
   );

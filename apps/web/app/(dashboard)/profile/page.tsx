@@ -1,54 +1,80 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { trpc } from "@/lib/trpc";
+import { useAuthStore } from "@/stores/auth-store";
+import { ACCENTS, AnimCount, Field, Logo, useUndoToast } from "@markme/ui";
 import {
-  LayoutGrid,
-  User,
-  Mail,
-  LogOut,
+  Bookmark,
+  Calendar,
   Camera,
   Check,
-  Bookmark,
+  Crown,
+  LayoutGrid,
+  LogOut,
+  Mail,
   Pin,
+  Shield,
   Tag,
   Trash2,
-  Crown,
-  Calendar,
-  Shield,
+  User,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { Logo, Field, AnimCount, useUndoToast, ACCENTS } from "@markme/ui";
-import { useAuthStore } from "@/stores/auth-store";
-import { useCategoriesStore } from "@/stores/categories-store";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 export default function ProfilePage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user)!;
   const updateUser = useAuthStore((s) => s.updateUser);
-  const categories = useCategoriesStore((s) => s.categories);
+
+  const { data: me, isLoading: meLoading } = trpc.user.me.useQuery();
+  const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const updateProfile = trpc.user.updateProfile.useMutation({
+    onSuccess: (row) => {
+      updateUser({ name: row.name, email: row.email });
+    },
+  });
 
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [saved, setSaved] = useState(false);
   const { flash, ToastEl } = useUndoToast();
 
-  const stats = {
-    cats: categories.length,
-    bms: categories.reduce((a, c) => a + c.bookmarks.length, 0),
-    pinned: categories.reduce(
-      (a, c) => a + c.bookmarks.filter((b) => b.pinned).length,
-      0,
-    ),
-    tags: new Set(categories.flatMap((c) => c.tags)).size,
-  };
+  useEffect(() => {
+    if (me) {
+      setName(me.name);
+      setEmail(me.email);
+    }
+  }, [me]);
+
+  const stats = useMemo(
+    () => ({
+      cats: categories.length,
+      bms: categories.reduce((a, c) => a + c.bookmarks.length, 0),
+      pinned: categories.reduce((a, c) => a + c.bookmarks.filter((b) => b.pinned).length, 0),
+      tags: new Set(categories.flatMap((c) => c.tags)).size,
+    }),
+    [categories],
+  );
+
+  const displayPlan = me?.plan ?? user.plan;
+  const joinedLabel = me?.createdAt ? new Date(me.createdAt).toLocaleDateString() : user.joinedAt;
 
   const save = () => {
-    updateUser({ name, email });
-    setSaved(true);
-    flash("Profile updated ✓");
-    setTimeout(() => setSaved(false), 2000);
+    updateProfile.mutate(
+      { name, email },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          flash("Profile updated ✓");
+          setTimeout(() => setSaved(false), 2000);
+        },
+        onError: () => flash("Couldn't save profile"),
+      },
+    );
   };
 
   const handleLogout = () => {
@@ -61,12 +87,7 @@ export default function ProfilePage() {
       name: "Free",
       price: "$0",
       desc: "Up to 100 bookmarks, 5 categories",
-      features: [
-        "100 bookmarks",
-        "5 categories",
-        "Export/Import JSON",
-        "Tag filtering",
-      ],
+      features: ["100 bookmarks", "5 categories", "Export/Import JSON", "Tag filtering"],
     },
     {
       id: "pro",
@@ -85,7 +106,15 @@ export default function ProfilePage() {
     },
   ];
 
-  const initial = user.name?.[0]?.toUpperCase() ?? "U";
+  const initial = (me?.name ?? name ?? user.name)?.[0]?.toUpperCase() ?? "U";
+
+  if (meLoading && !me) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center font-sans text-sm text-mm-text-muted">
+        Loading profile…
+      </div>
+    );
+  }
 
   return (
     <>
@@ -120,10 +149,7 @@ export default function ProfilePage() {
       </nav>
 
       {/* Main */}
-      <main
-        id="main-content"
-        className="relative z-1 mx-auto max-w-[900px] px-5 pb-20 pt-10"
-      >
+      <main id="main-content" className="relative z-1 mx-auto max-w-[900px] px-5 pb-20 pt-10">
         {/* Profile card */}
         <section className="mb-8 border border-mm-border bg-mm-bg-el p-0">
           <div className="relative overflow-hidden border-b border-mm-border bg-mm-bg-panel px-8 py-10">
@@ -148,19 +174,17 @@ export default function ProfilePage() {
               {/* Info */}
               <div className="text-center sm:text-left">
                 <h1 className="text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-mm-text">
-                  {user.name}
+                  {me?.name ?? name}
                 </h1>
-                <p className="mt-1 text-[14px] text-mm-text-sec">
-                  {user.email}
-                </p>
+                <p className="mt-1 text-[14px] text-mm-text-sec">{me?.email ?? email}</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                   <span className="inline-flex items-center gap-1 border border-mm-primary/20 bg-mm-primary-subtle px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.04em] text-mm-primary">
                     <Crown size={10} />
-                    {user.plan} plan
+                    {displayPlan} plan
                   </span>
                   <span className="inline-flex items-center gap-1 text-[11px] text-mm-text-muted">
                     <Calendar size={10} />
-                    Joined {user.joinedAt}
+                    Joined {joinedLabel}
                   </span>
                 </div>
               </div>
@@ -192,7 +216,9 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={save}
-              disabled={name === user.name && email === user.email}
+              disabled={
+                updateProfile.isPending || (me != null && name === me.name && email === me.email)
+              }
               className="mt-2 inline-flex cursor-pointer items-center gap-1.5 bg-white px-5 py-2.5 text-[13px] font-extrabold text-mm-bg shadow-[3px_3px_0_rgba(0,0,0,0.3)] transition-all hover:-translate-y-px hover:shadow-[4px_4px_0_rgba(0,0,0,0.4)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saved ? (
@@ -268,7 +294,7 @@ export default function ProfilePage() {
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {plans.map((plan) => {
-              const isActive = user.plan === plan.id;
+              const isActive = displayPlan === plan.id;
               const isPro = plan.id === "pro";
               return (
                 <div
@@ -282,17 +308,10 @@ export default function ProfilePage() {
                       : undefined
                   }
                 >
-                  {isPro && (
-                    <div
-                      className="h-[3px]"
-                      style={{ background: plan.color }}
-                    />
-                  )}
+                  {isPro && <div className="h-[3px]" style={{ background: plan.color }} />}
                   <div className="p-6">
                     <div className="mb-1 flex items-center gap-2">
-                      <h3 className="text-[16px] font-extrabold text-mm-text">
-                        {plan.name}
-                      </h3>
+                      <h3 className="text-[16px] font-extrabold text-mm-text">{plan.name}</h3>
                       {isActive && (
                         <span className="border border-mm-success/20 bg-mm-success/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.04em] text-mm-success">
                           Current
@@ -302,9 +321,7 @@ export default function ProfilePage() {
                     <div className="mb-1 text-[24px] font-extrabold tracking-[-0.02em] text-mm-text">
                       {plan.price}
                     </div>
-                    <p className="mb-4 text-[13px] text-mm-text-muted">
-                      {plan.desc}
-                    </p>
+                    <p className="mb-4 text-[13px] text-mm-text-muted">{plan.desc}</p>
                     <ul className="space-y-2">
                       {plan.features.map((f) => (
                         <li
@@ -313,9 +330,7 @@ export default function ProfilePage() {
                         >
                           <Check
                             size={12}
-                            className={
-                              isPro ? "text-mm-primary" : "text-mm-success"
-                            }
+                            className={isPro ? "text-mm-primary" : "text-mm-success"}
                           />
                           {f}
                         </li>
@@ -358,8 +373,7 @@ export default function ProfilePage() {
                   Delete Account
                 </h3>
                 <p className="mt-1 text-[13px] text-mm-text-muted">
-                  Permanently remove your account and all data. This action
-                  cannot be undone.
+                  Permanently remove your account and all data. This action cannot be undone.
                 </p>
               </div>
               <button
