@@ -1,0 +1,12 @@
+{
+  "name": "@markme/web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "echo 'Next.js app — not yet scaffolded'",
+    "build": "echo 'Next.js app — not yet scaffolded'",
+    "type-check": "echo 'Next.js app — not yet scaffolded'"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

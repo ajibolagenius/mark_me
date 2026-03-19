@@ -1,0 +1,7 @@
+{
+  "extends": "@markme/config/typescript/react.json",
+  "compilerOptions": {
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}
