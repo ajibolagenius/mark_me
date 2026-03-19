@@ -1,24 +1,53 @@
 interface LogoProps {
   size?: number;
+  /** Set false to show the icon mark only (no wordmark text). */
+  wordmark?: boolean;
 }
 
-export function Logo({ size = 28 }: LogoProps) {
+export function Logo({ size = 28, wordmark = true }: LogoProps) {
   return (
     <div className="flex cursor-pointer items-center gap-2.5">
-      <div
-        className="flex items-center justify-center bg-linear-to-br from-mm-primary to-mm-secondary"
-        style={{ width: size, height: size }}
+      {/* Inline SVG so the gradient renders correctly at every size */}
+      <svg
+        viewBox="0 0 204 204"
+        width={size}
+        height={size}
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        style={{ flexShrink: 0 }}
       >
-        <span style={{ fontSize: size * 0.55 }} className="brightness-200">
-          🔖
+        <defs>
+          <linearGradient
+            id="mm-logo-g"
+            gradientUnits="userSpaceOnUse"
+            x1="47"
+            y1="80"
+            x2="157"
+            y2="122"
+          >
+            <stop offset="0%" stopColor="#A855F7" />
+            <stop offset="100%" stopColor="#22D3EE" />
+          </linearGradient>
+        </defs>
+        <rect width="204" height="204" fill="#0D0D0D" />
+        <path
+          fill="url(#mm-logo-g)"
+          d="M81.242,87.096c1.088,-1.712 2.427,-3.08 4.018,-4.105c2.483,-1.599 5.348,-2.399 8.597,-2.399c2.875,0 5.445,0.647 7.71,1.941c2.265,1.294 4.054,3.093 5.367,5.395c1.313,2.302 1.969,4.966 1.969,7.99l0,26.154l-9.801,0l0,-23.82c0,-1.805 -0.324,-3.348 -0.971,-4.63c-0.647,-1.282 -1.549,-2.281 -2.707,-2.996c-1.157,-0.716 -2.539,-1.073 -4.144,-1.073c-1.556,0 -2.928,0.358 -4.116,1.073c-1.189,0.716 -2.109,1.717 -2.763,3.006c-0.653,1.288 -0.98,2.828 -0.98,4.62l0,23.82l-9.801,0l0,-23.82c0,-1.805 -0.324,-3.348 -0.971,-4.63c-0.647,-1.282 -1.549,-2.281 -2.707,-2.996c-1.157,-0.716 -2.539,-1.073 -4.144,-1.073c-1.568,0 -2.943,0.358 -4.126,1.073c-1.182,0.716 -2.1,1.717 -2.754,3.006c-0.653,1.288 -0.98,2.828 -0.98,4.62l0,23.82l-9.801,0l0,-40.584l9.241,0l-0,4.986c0.817,-1.548 1.953,-2.787 3.407,-3.716c2.259,-1.444 4.907,-2.165 7.943,-2.165c3.31,0 6.238,0.862 8.783,2.586c1.597,1.082 2.841,2.388 3.729,3.918Z"
+        />
+        <path
+          fill="url(#mm-logo-g)"
+          d="M125.648,104.562c0.13,1.387 0.463,2.66 0.998,3.818c0.877,1.898 2.172,3.373 3.883,4.424c1.711,1.052 3.706,1.577 5.983,1.577c2.228,-0 4.122,-0.473 5.684,-1.419c1.562,-0.946 2.797,-2.203 3.706,-3.771l7.915,3.827c-0.796,1.941 -2.044,3.662 -3.743,5.162c-1.699,1.5 -3.709,2.673 -6.03,3.519c-2.321,0.846 -4.869,1.269 -7.645,1.269c-4.182,0 -7.844,-0.946 -10.986,-2.838c-3.142,-1.892 -5.585,-4.449 -7.327,-7.673c-1.742,-3.223 -2.614,-6.814 -2.614,-10.771c0,-4.07 0.893,-7.688 2.679,-10.855c1.786,-3.167 4.2,-5.666 7.243,-7.495c3.043,-1.829 6.475,-2.744 10.295,-2.744c3.149,0 5.94,0.516 8.373,1.549c2.433,1.033 4.493,2.467 6.179,4.303c1.686,1.836 2.971,3.942 3.855,6.319c0.884,2.377 1.325,4.928 1.325,7.654c0,0.722 -0.034,1.45 -0.103,2.184c-0.068,0.734 -0.19,1.388 -0.364,1.96l-29.308,0Zm0.244,-7.467l19.131,0c-0.064,-0.937 -0.254,-1.821 -0.568,-2.651c-0.678,-1.792 -1.78,-3.211 -3.304,-4.256c-1.525,-1.045 -3.345,-1.568 -5.46,-1.568c-2.078,0 -3.905,0.516 -5.479,1.549c-1.574,1.033 -2.772,2.53 -3.594,4.49c-0.315,0.752 -0.557,1.564 -0.726,2.436Z"
+        />
+      </svg>
+
+      {wordmark && (
+        <span
+          className="font-sans font-extrabold tracking-tight"
+          style={{ fontSize: size * 0.6 }}
+        >
+          mark<span className="text-mm-primary">_</span>me
         </span>
-      </div>
-      <span
-        className="font-sans font-extrabold tracking-tight"
-        style={{ fontSize: size * 0.6 }}
-      >
-        mark<span className="text-mm-primary">_</span>me
-      </span>
+      )}
     </div>
   );
 }
