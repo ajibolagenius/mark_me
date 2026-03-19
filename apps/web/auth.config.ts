@@ -3,6 +3,18 @@ import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 
+/** Non-empty secret from env; empty strings from `.env` are treated as unset. */
+function readAuthSecret(): string | undefined {
+  const raw = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+const devAuthSecret =
+  process.env.NODE_ENV === "development"
+    ? "markme-dev-only-do-not-use-in-production"
+    : undefined;
+
 /** Edge-safe providers (no DB). Credentials live in `auth.ts`. */
 const providers: NextAuthConfig["providers"] = [];
 
@@ -35,7 +47,7 @@ if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
 
 export const authConfig = {
   trustHost: true,
-  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  secret: readAuthSecret() ?? devAuthSecret,
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
   pages: { signIn: "/login" },
   callbacks: {
