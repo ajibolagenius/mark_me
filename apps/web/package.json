@@ -2,11 +2,33 @@
   "name": "@markme/web",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "echo 'Next.js app — not yet scaffolded'",
-    "build": "echo 'Next.js app — not yet scaffolded'",
-    "type-check": "echo 'Next.js app — not yet scaffolded'"
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome check app/ lib/ stores/",
+    "type-check": "tsc --noEmit"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@markme/ui": "workspace:*",
+    "@tanstack/react-query": "^5.80.7",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^0.577.0",
+    "next": "^15.4.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-hook-form": "^7.57.0",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@markme/config": "workspace:*",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^22.16.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.8.3"
+  }
 }
