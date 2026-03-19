@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, X, Send } from "lucide-react";
 import type { Category } from "@markme/ui";
 import { useFocusTrap } from "@markme/ui";
+import { AnimatePresence, motion } from "framer-motion";
+import { Send, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface AiPanelProps {
   open: boolean;
@@ -24,7 +24,7 @@ const SUGGESTIONS = [
   "Which categories should I reorganize?",
 ];
 
-export function AiPanel({ open, onClose, categories }: AiPanelProps) {
+export function AiPanel({ open, onClose }: AiPanelProps) {
   const trapRef = useFocusTrap(open);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -35,6 +35,7 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
   ]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (scrollRef.current)
@@ -50,52 +51,94 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const buildContext = () => {
-    return categories
-      .map(
-        (c) =>
-          `Category "${c.name}" (${c.icon}, tags: ${c.tags?.join(", ") || "none"}):\n` +
-          c.bookmarks
-            .map(
-              (b) =>
-                `  - "${b.title}" ${b.url} [tags: ${b.tags?.join(", ") || "none"}]${b.pinned ? " (pinned)" : ""}${b.note ? ` note: ${b.note}` : ""}`
-            )
-            .join("\n")
-      )
-      .join("\n\n");
-  };
-
-  const sendMessage = async () => {
+  const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
     const userMsg = input.trim();
     setInput("");
     setMessages((prev) => [...prev, { role: "user", text: userMsg }]);
     setLoading(true);
 
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    // Add placeholder for streaming AI text
+    setMessages((prev) => [...prev, { role: "ai", text: "" }]);
+
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: `You are the AI assistant for mark_me, a bookmark manager app. The user has the following bookmarks:\n\n${buildContext()}\n\nHelp the user organize, tag, summarize, and discover insights about their bookmarks. Be concise and helpful. When suggesting tags, format them as comma-separated lowercase words. When summarizing, be brief (2-3 sentences max). If asked to find duplicates or suggest reorganization, analyze the data and give specific actionable suggestions.`,
-          messages: [{ role: "user", content: userMsg }],
-        }),
+        body: JSON.stringify({ message: userMsg }),
+        signal: ac.signal,
       });
-      const data = await res.json();
-      const aiText =
-        data.content?.map((c: { text?: string }) => c.text || "").join("") ||
-        "Sorry, I couldn't process that request.";
-      setMessages((prev) => [...prev, { role: "ai", text: aiText }]);
-    } catch {
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: "ai", text: err.error ?? `Error ${res.status}` },
+        ]);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const dec = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          const raw = line.slice(5).trim();
+          if (raw === "[DONE]") break;
+          try {
+            const evt = JSON.parse(raw) as { text?: string; error?: string };
+            if (evt.error) {
+              setMessages((prev) => [
+                ...prev.slice(0, -1),
+                { role: "ai", text: evt.error ?? "Error" },
+              ]);
+              break;
+            }
+            if (evt.text) {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "ai") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { role: "ai", text: last.text + evt.text },
+                  ];
+                }
+                return [...prev, { role: "ai", text: evt.text ?? "" }];
+              });
+            }
+          } catch {
+            /* skip malformed event */
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setMessages((prev) => [
-        ...prev,
+        ...prev.slice(0, -1),
         { role: "ai", text: "Connection error. Please try again." },
       ]);
+    } finally {
+      setLoading(false);
+      abortRef.current = null;
     }
-    setLoading(false);
-  };
+  }, [input, loading]);
+
+  // Cancel in-flight request when panel closes
+  useEffect(() => {
+    if (!open) abortRef.current?.abort();
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -118,12 +161,8 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
                 <Sparkles size={14} className="text-white" />
               </div>
               <div>
-                <div className="text-sm font-extrabold tracking-tight">
-                  AI Assistant
-                </div>
-                <div className="text-[10px] text-mm-text-muted">
-                  Powered by Claude
-                </div>
+                <div className="text-sm font-extrabold tracking-tight">AI Assistant</div>
+                <div className="text-[10px] text-mm-text-muted">Powered by Claude</div>
               </div>
             </div>
             <button
@@ -143,11 +182,10 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
           >
             {messages.map((m, i) => (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: static ordered message list
                 key={i}
                 className={`flex gap-2 ${
-                  m.role === "user"
-                    ? "flex-row-reverse items-end"
-                    : "items-start"
+                  m.role === "user" ? "flex-row-reverse items-end" : "items-start"
                 }`}
               >
                 <div
@@ -167,22 +205,24 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
                   }`}
                 >
                   {m.text}
+                  {/* blinking cursor on active AI stream */}
+                  {m.role === "ai" && loading && i === messages.length - 1 && (
+                    <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-mm-primary align-middle" />
+                  )}
                 </div>
               </div>
             ))}
-            {loading && (
+            {loading && messages[messages.length - 1]?.role !== "ai" && (
               <div className="flex items-start gap-2">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center bg-linear-to-br from-mm-primary to-mm-secondary">
                   <Sparkles size={10} className="text-white" />
                 </div>
                 <div className="flex gap-1 border border-mm-border bg-mm-bg-panel px-4 py-3">
-                  {[0, 1, 2].map((i) => (
+                  {[0, 1, 2].map((idx) => (
                     <div
-                      key={i}
+                      key={idx}
                       className="h-1.5 w-1.5 rounded-full bg-mm-primary opacity-50"
-                      style={{
-                        animation: `pulse 1s ease ${i * 0.15}s infinite`,
-                      }}
+                      style={{ animation: `pulse 1s ease ${idx * 0.15}s infinite` }}
                     />
                   ))}
                 </div>
@@ -193,9 +233,9 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
           {/* Quick suggestions */}
           {messages.length <= 1 && !loading && (
             <div className="flex flex-wrap gap-1 px-[18px] pb-2">
-              {SUGGESTIONS.map((s, i) => (
+              {SUGGESTIONS.map((s) => (
                 <button
-                  key={i}
+                  key={s}
                   type="button"
                   onClick={() => setInput(s)}
                   className="border border-mm-primary/15 bg-mm-primary-subtle px-2.5 py-1 text-left text-[10px] font-semibold text-mm-primary transition-colors hover:bg-mm-primary/15"
@@ -215,7 +255,7 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    sendMessage();
+                    void sendMessage();
                   }
                 }}
                 placeholder="Ask about your bookmarks…"
@@ -224,13 +264,11 @@ export function AiPanel({ open, onClose, categories }: AiPanelProps) {
               />
               <button
                 type="button"
-                onClick={sendMessage}
+                onClick={() => void sendMessage()}
                 disabled={loading || !input.trim()}
                 aria-label="Send message"
                 className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center p-0 transition-all duration-150 ${
-                  input.trim()
-                    ? "bg-mm-primary text-white"
-                    : "bg-mm-bg-input text-mm-text-muted"
+                  input.trim() ? "bg-mm-primary text-white" : "bg-mm-bg-input text-mm-text-muted"
                 }`}
               >
                 <Send size={16} />

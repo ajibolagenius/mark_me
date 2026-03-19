@@ -9,7 +9,8 @@ export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
 export { router, publicProcedure, protectedProcedure } from "./trpc";
 export * as schemas from "./schemas";
-export { AI_DAILY_LIMIT, consumeAiQuota } from "./lib/ai-quota";
+export { AI_DAILY_LIMIT_FREE, consumeAiQuota } from "./lib/ai-quota";
+export { buildBookmarkContextText } from "./lib/bookmark-context";
 
 import type { ApiContext } from "./context";
 import { appRouter } from "./root";

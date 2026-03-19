@@ -16,3 +16,7 @@ export const aiSummarizeSchema = z.object({
 export const aiDetectDuplicatesSchema = z.object({
   minScore: z.number().min(0).max(1).default(0.85),
 });
+
+export const aiReorganizeSchema = z.object({
+  hint: z.string().max(500).optional(),
+});
