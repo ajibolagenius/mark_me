@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./schemas": "./src/schemas/index.ts"
   },
   "scripts": {
     "build": "tsc --build",
@@ -12,9 +13,16 @@
     "lint": "biome check src/",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@markme/db": "workspace:*",
+    "@trpc/server": "^11.13.4",
+    "drizzle-orm": "^0.44.7",
+    "superjson": "^2.2.6",
+    "zod": "^3.25.76"
+  },
   "devDependencies": {
     "@markme/config": "workspace:*",
+    "@types/node": "^22.19.15",
     "typescript": "^5.8.3"
   }
 }
