@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { createOpenRouterClient } from "./client";
-import { getOpenRouterModel } from "./env";
+import { getOpenRouterFallbackModels, getOpenRouterModel } from "./env";
 import {
     autoTagUserPrompt,
     duplicatesUserPrompt,
@@ -25,10 +25,12 @@ async function completeJson<T>(
     shapeHint: string,
 ): Promise<T> {
     const client = createOpenRouterClient();
+    const fallbacks = getOpenRouterFallbackModels();
     const message = await client.chat.completions.create({
         model: getOpenRouterModel(),
         max_tokens: maxTokens,
         response_format: { type: "json_object" },
+        ...(fallbacks.length > 0 ? { models: fallbacks } : {}),
         messages: [
             {
                 role: "system",

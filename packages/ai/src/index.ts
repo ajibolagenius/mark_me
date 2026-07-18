@@ -1,13 +1,16 @@
 export {
     DEFAULT_OPENROUTER_MODEL,
+    DEFAULT_OPENROUTER_FALLBACK_MODELS,
     DEFAULT_ANTHROPIC_MODEL,
     getOpenRouterApiKey,
     getOpenRouterModel,
+    getOpenRouterFallbackModels,
     getAnthropicApiKey,
     getAnthropicModel,
     isOpenRouterConfigured,
     isAnthropicConfigured,
 } from "./env";
+export { formatOpenRouterError } from "./errors";
 export {
     autoTagResultSchema,
     duplicateResultSchema,

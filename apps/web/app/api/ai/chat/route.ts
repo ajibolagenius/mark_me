@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth/server";
 import { createAuthDb } from "@/lib/db";
 import { ensureAppUser } from "@/lib/ensure-app-user";
 import { buildBookmarkContextText, consumeAiQuota, type AppDb } from "@markme/api";
-import { isOpenRouterConfigured, streamBookmarkAssistant } from "@markme/ai";
+import { formatOpenRouterError, isOpenRouterConfigured, streamBookmarkAssistant } from "@markme/ai";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
                 }
                 controller.enqueue(enc.encode("data: [DONE]\n\n"));
             } catch (err) {
-                const message = err instanceof Error ? err.message : "stream error";
+                const message = formatOpenRouterError(err);
                 controller.enqueue(enc.encode(`data: ${JSON.stringify({ error: message })}\n\n`));
             } finally {
                 controller.close();

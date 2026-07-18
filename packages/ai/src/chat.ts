@@ -1,6 +1,16 @@
 import { createOpenRouterClient } from "./client";
-import { getOpenRouterModel } from "./env";
+import { getOpenRouterFallbackModels, getOpenRouterModel } from "./env";
 import { systemPromptWithBookmarkContext } from "./prompts";
+
+function openRouterChatOptions() {
+    const fallbacks = getOpenRouterFallbackModels();
+    return {
+        model: getOpenRouterModel(),
+        max_tokens: 4096,
+        // OpenRouter extension: try these if the primary model/provider is exhausted
+        ...(fallbacks.length > 0 ? { models: fallbacks } : {}),
+    };
+}
 
 /** Yields text deltas from the OpenRouter chat stream. */
 export async function* streamBookmarkAssistant(options: {
@@ -11,8 +21,7 @@ export async function* streamBookmarkAssistant(options: {
     const client = createOpenRouterClient();
     const stream = await client.chat.completions.create(
         {
-            model: getOpenRouterModel(),
-            max_tokens: 4096,
+            ...openRouterChatOptions(),
             stream: true,
             messages: [
                 {
@@ -46,8 +55,7 @@ export async function runBookmarkAssistantCompletion(
 ): Promise<string> {
     const client = createOpenRouterClient();
     const message = await client.chat.completions.create({
-        model: getOpenRouterModel(),
-        max_tokens: 4096,
+        ...openRouterChatOptions(),
         messages: [
             {
                 role: "system",
