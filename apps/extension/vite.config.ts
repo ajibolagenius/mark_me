@@ -11,36 +11,62 @@ const target = process.env.TARGET === "firefox" ? "firefox" : "chrome";
 // release zips never race a `pnpm dev` watcher writing to dist/.
 const outDir = process.env.OUTDIR ?? (target === "firefox" ? "dist-firefox" : "dist");
 
+// RELEASE=1 (set by scripts/package.mjs) replaces the dev/preview origins in
+// the manifest with ones derived from VITE_API_URL — store reviewers flag
+// localhost, `*.vercel.app` would let any Vercel-hosted site talk to the auth
+// bridge, and deriving from the baked API URL keeps the two in lockstep.
+const release = process.env.RELEASE === "1";
+function releaseOrigin(): string {
+  const apiUrl = process.env.VITE_API_URL;
+  if (!apiUrl) throw new Error("RELEASE build requires VITE_API_URL");
+  return new URL(apiUrl).origin;
+}
+
 /**
- * Firefox MV3 differences, applied to the copied manifest after build:
- * - background runs as an event page (`scripts`), not a service worker
- * - `browser_specific_settings.gecko.id` is required for signing/installing
- * - `externally_connectable` is unsupported (auth uses the content-script
+ * Post-build manifest transform, applied to the copy in outDir:
+ * - release: replace host_permissions, content_scripts matches, and
+ *   externally_connectable with origins derived from VITE_API_URL
+ * - firefox: background runs as an event page (`scripts`), not a service
+ *   worker; `browser_specific_settings.gecko.id` is required for signing;
+ *   `externally_connectable` is unsupported (auth uses the content-script
  *   bridge instead), so drop it to avoid install warnings
  */
-function firefoxManifest(): Plugin {
+function transformManifest(): Plugin {
   return {
-    name: "markme:firefox-manifest",
+    name: "markme:transform-manifest",
     apply: "build",
     closeBundle() {
-      if (target !== "firefox") return;
+      if (!release && target !== "firefox") return;
       const path = resolve(__dirname, outDir, "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
 
-      manifest.background = { scripts: ["background.js"], type: "module" };
-      manifest.externally_connectable = undefined;
-      manifest.browser_specific_settings = {
-        gecko: {
-          id: "extension@markme.live",
-          strict_min_version: "142.0",
-          // Required for new AMO submissions: what the extension transmits.
-          // Saved bookmarks (URLs/titles) and the account token go to the
-          // user's own mark_me account — nothing else is collected.
-          data_collection_permissions: {
-            required: ["authenticationInfo", "bookmarksInfo"],
+      if (release) {
+        const origin = releaseOrigin();
+        manifest.host_permissions = [`${origin}/*`];
+        for (const cs of manifest.content_scripts) {
+          cs.matches = [`${origin}/extension-auth*`];
+        }
+        if (manifest.externally_connectable) {
+          manifest.externally_connectable.matches = [`${origin}/*`];
+        }
+      }
+
+      if (target === "firefox") {
+        manifest.background = { scripts: ["background.js"], type: "module" };
+        manifest.externally_connectable = undefined;
+        manifest.browser_specific_settings = {
+          gecko: {
+            id: "extension@markme.live",
+            strict_min_version: "142.0",
+            // Required for new AMO submissions: what the extension transmits.
+            // Saved bookmarks (URLs/titles) and the account token go to the
+            // user's own mark_me account — nothing else is collected.
+            data_collection_permissions: {
+              required: ["authenticationInfo", "bookmarksInfo"],
+            },
           },
-        },
-      };
+        };
+      }
 
       writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
     },
@@ -48,7 +74,7 @@ function firefoxManifest(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), firefoxManifest()],
+  plugins: [react(), tailwindcss(), transformManifest()],
   build: {
     outDir,
     emptyOutDir: true,

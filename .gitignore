@@ -49,3 +49,6 @@ apps/current/node_modules/
 # Serwist
 apps/web/public/sw*
 apps/web/public/swe-worker*
+
+# Extension
+apps/extension/dist.pem

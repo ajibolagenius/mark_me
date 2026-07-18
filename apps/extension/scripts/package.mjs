@@ -17,6 +17,13 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const { version } = JSON.parse(readFileSync(resolve(root, "public/manifest.json"), "utf8"));
 
+// Release builds must point at the production API, never a dev fallback.
+// Override with VITE_API_URL=... pnpm package (e.g. for a staging build).
+// Trailing slashes would bake double-slash URLs (`...app//extension-auth`)
+// into the bundle and break the auth-bridge match pattern — strip them.
+const apiUrl = (process.env.VITE_API_URL ?? "https://markme-app.vercel.app").replace(/\/+$/, "");
+console.log(`Packaging v${version} against API: ${apiUrl}`);
+
 const targets = [
   { name: "chrome", env: {} },
   { name: "firefox", env: { TARGET: "firefox" } },
@@ -31,7 +38,14 @@ for (const { name, env } of targets) {
   execSync("pnpm vite build", {
     cwd: root,
     stdio: "inherit",
-    env: { ...process.env, ...env, NODE_ENV: "production", OUTDIR: buildDir },
+    env: {
+      ...process.env,
+      ...env,
+      NODE_ENV: "production",
+      RELEASE: "1",
+      VITE_API_URL: apiUrl,
+      OUTDIR: buildDir,
+    },
   });
 
   const required = [
