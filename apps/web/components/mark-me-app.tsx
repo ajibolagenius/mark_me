@@ -1109,6 +1109,8 @@ function LandingPage({ onNavigate }) {
               <button key={l.p} onClick={()=>onNavigate(l.p)} style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:0, fontSize:12 }}
                 onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}>{l.label}</button>
             ))}
+            <a href="/privacy" style={{ fontFamily:T.font, color:T.textMuted, fontSize:12, textDecoration:"none" }}
+              onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}>Privacy</a>
             <span style={{ fontSize:12, color:T.textMuted }}>&copy; 2026 mark_me</span>
           </div>
         </div>
