@@ -54,6 +54,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={jakarta.variable}>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+      </head>
       <body style={{ margin: 0 }}>
         <Providers>{children}</Providers>
       </body>
