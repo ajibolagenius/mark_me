@@ -892,12 +892,12 @@ function LandingPage({ onNavigate }) {
   ];
 
   return (
-    <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text }}>
+    <div style={{ minHeight:"100vh", background:T.bg, fontFamily:T.font, color:T.text, display:"flex", flexDirection:"column" }}>
       <Atmosphere />
       <SkipLink />
 
       {/* Nav */}
-      <nav aria-label="Site navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}` }}>
+      <nav aria-label="Site navigation" style={{ position:"sticky", top:0, zIndex:100, backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", background:"rgba(13,13,13,0.85)", borderBottom:`1px solid ${T.border}`, flexShrink:0 }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <Logo />
           <div style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -913,8 +913,10 @@ function LandingPage({ onNavigate }) {
         </div>
       </nav>
 
+      <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+
       {/* Hero */}
-      <section id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"80px 20px 60px", position:"relative", zIndex:1, textAlign:"center" }}>
+      <section id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"72px 20px 28px", position:"relative", zIndex:1, textAlign:"center" }}>
         <div style={{ animation:"mmSlideUp .5s ease both" }}>
           <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:T.primarySubtle, border:`1px solid ${T.primary}30`, padding:"4px 14px", marginBottom:24, fontSize:11, fontWeight:700, color:T.primary, textTransform:"uppercase", letterSpacing:"0.04em" }}>
             <I.Zap /> Now in public beta
@@ -938,6 +940,121 @@ function LandingPage({ onNavigate }) {
         </div>
 
       </section>
+
+      {/* Product preview — full dashboard mock */}
+      <div aria-hidden="true" style={{ maxWidth:1240, margin:"0 auto", padding:"0 20px 48px", position:"relative", zIndex:1, width:"100%", boxSizing:"border-box" }}>
+        <div className="mm-landing-preview" style={{
+          marginTop:8, background:T.bgEl, border:`1px solid ${T.border}`, padding:3,
+          boxShadow:"12px 12px 0 rgba(0,0,0,0.45)", position:"relative",
+          animation:"mmCardSpring .65s cubic-bezier(0.34, 1.56, 0.64, 1) 180ms both", overflow:"hidden",
+        }}>
+          <div style={{ position:"absolute", top:-40, left:"15%", width:280, height:280, borderRadius:"50%", background:T.primary, filter:"blur(90px)", opacity:0.1, pointerEvents:"none" }} />
+          <div style={{ position:"absolute", bottom:-50, right:"10%", width:260, height:260, borderRadius:"50%", background:T.secondary, filter:"blur(80px)", opacity:0.08, pointerEvents:"none" }} />
+
+          {/* Browser chrome */}
+          <div style={{ background:T.bgPanel, padding:"12px 16px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:10, position:"relative" }}>
+            <div style={{ display:"flex", gap:6 }}>{[T.error,"#F59E0B",T.success].map((c,i)=><div key={i} style={{ width:10, height:10, borderRadius:"50%", background:c, opacity:0.7 }} />)}</div>
+            <div style={{ flex:1, background:T.bgInput, border:`1px solid ${T.border}`, padding:"6px 12px", fontSize:12, color:T.textMuted }}>
+              markme-app.vercel.app/dashboard
+            </div>
+          </div>
+
+          {/* App chrome */}
+          <div style={{ background:T.bg, borderBottom:`1px solid ${T.border}`, padding:"12px 16px", display:"flex", alignItems:"center", gap:12, position:"relative" }}>
+            <Logo size={22} />
+            <div style={{ flex:1, maxWidth:360, background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 12px", display:"flex", alignItems:"center", gap:8, fontSize:12, color:T.textMuted }}>
+              <I.Search /> Search bookmarks…
+            </div>
+            <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
+              <div style={{ padding:"7px 12px", background:T.primarySubtle, border:`1px solid ${T.primary}30`, color:T.primary, fontSize:11, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><I.Sparkle /> AI</div>
+              <div style={{ width:28, height:28, background:T.bgInput, border:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:T.textSec }}>A</div>
+            </div>
+          </div>
+
+          {/* Dashboard body */}
+          <div style={{ padding:18, position:"relative", minHeight:420, background:`linear-gradient(180deg, ${T.bg} 0%, ${T.bgEl} 100%)` }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+              <div style={{ textAlign:"left" }}>
+                <div style={{ fontSize:18, fontWeight:800, letterSpacing:"-0.03em", color:T.text }}>Your collections</div>
+                <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>6 categories · 17 bookmarks · 4 pinned</div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <div style={{ padding:"7px 12px", background:T.bgInput, border:`1px solid ${T.border}`, fontSize:11, fontWeight:700, color:T.textSec }}>All tags</div>
+                <div style={{ padding:"7px 12px", background:"#fff", color:T.bg, fontSize:11, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.35)", display:"flex", alignItems:"center", gap:4 }}><I.Plus /> New</div>
+              </div>
+            </div>
+
+            <div className="mm-landing-cats" style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:14, textAlign:"left" }}>
+              {[
+                { name:"Design Inspiration", icon:"🎨", color:0, tags:["design","ui/ux"], bookmarks:[
+                  { title:"Dribbble", note:"Daily design inspiration", pinned:true },
+                  { title:"Behance", note:"Portfolio showcase" },
+                  { title:"Awwwards", note:"Award-winning websites" },
+                ]},
+                { name:"Dev Tools", icon:"⚡", color:1, tags:["dev","tools"], bookmarks:[
+                  { title:"GitHub", note:"Code hosting & collab", pinned:true },
+                  { title:"VS Code Web", note:"Browser-based IDE" },
+                  { title:"Stack Overflow", note:"Q&A for developers" },
+                ]},
+                { name:"Productivity", icon:"🚀", color:2, tags:["work","apps"], bookmarks:[
+                  { title:"Notion", note:"All-in-one workspace", pinned:true },
+                  { title:"Linear", note:"Issue tracking done right" },
+                  { title:"Figma", note:"Design tool of choice" },
+                ]},
+              ].map((cat, i) => {
+                const ac = ACCENTS[cat.color % ACCENTS.length];
+                return (
+                  <div key={cat.name} style={{
+                    background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", position:"relative",
+                    boxShadow:"4px 4px 0 rgba(0,0,0,0.3)",
+                    animation:`mmCardSpring 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) ${220 + i*80}ms both`,
+                  }}>
+                    <div style={{ height:3, background:ac.bg }} />
+                    <div style={{ position:"absolute", top:-36, right:-36, width:100, height:100, borderRadius:"50%", background:ac.bg, filter:"blur(50px)", opacity:0.14, pointerEvents:"none" }} />
+                    <div style={{ padding:"14px 14px 10px", position:"relative" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                        <span style={{ fontSize:20, lineHeight:1 }}>{cat.icon}</span>
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontSize:14, fontWeight:800, color:T.text, letterSpacing:"-0.02em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{cat.name}</div>
+                          <div style={{ display:"flex", gap:4, marginTop:4 }}>
+                            <span style={{ fontSize:10, fontWeight:700, color:ac.bg, background:ac.bg+"18", border:`1px solid ${ac.bg}30`, padding:"1px 6px" }}>{cat.bookmarks.length}</span>
+                            <span style={{ fontSize:10, fontWeight:700, color:T.warning, background:T.warning+"18", border:`1px solid ${T.warning}30`, padding:"1px 6px" }}>1 pinned</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:3, flexWrap:"wrap", marginBottom:4 }}>
+                        {cat.tags.map(t=>(
+                          <span key={t} style={{ fontSize:9, fontWeight:700, color:ac.bg, background:ac.bg+"14", border:`1px solid ${ac.bg}28`, padding:"1px 6px", textTransform:"uppercase", letterSpacing:"0.03em" }}>{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ borderTop:`1px solid ${T.border}` }}>
+                      {cat.bookmarks.map((bm, bi) => (
+                        <div key={bm.title} style={{
+                          display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
+                          borderBottom: bi < cat.bookmarks.length - 1 ? `1px solid ${T.border}` : "none",
+                          background: bi % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
+                        }}>
+                          <div style={{ width:28, height:28, flexShrink:0, background:ac.bg+"18", border:`1px solid ${ac.bg}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:ac.bg }}>
+                            {bm.title.slice(0,1)}
+                          </div>
+                          <div style={{ minWidth:0, flex:1 }}>
+                            <div style={{ fontSize:12, fontWeight:700, color:T.text, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                              {bm.pinned && <span style={{ color:T.warning, display:"inline-flex" }}><I.Pin /></span>}
+                              {bm.title}
+                            </div>
+                            <div style={{ fontSize:10, color:T.textMuted, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{bm.note}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Features */}
       <section style={{ maxWidth:1100, margin:"0 auto", padding:"48px 20px 80px", position:"relative", zIndex:1 }}>
@@ -970,9 +1087,10 @@ function LandingPage({ onNavigate }) {
           </button>
         </div>
       </section>
+      </div>
 
-      {/* Footer */}
-      <footer style={{ borderTop:`1px solid ${T.border}`, position:"relative", zIndex:1 }}>
+      {/* Footer — pinned to viewport bottom when page is short */}
+      <footer style={{ borderTop:`1px solid ${T.border}`, position:"relative", zIndex:1, marginTop:"auto", flexShrink:0 }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"24px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
           <Logo size={20} />
           <div style={{ display:"flex", alignItems:"center", gap:16 }}>
@@ -988,9 +1106,12 @@ function LandingPage({ onNavigate }) {
       <style>{`
         @media (max-width: 900px) {
           .mm-features-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .mm-landing-cats { grid-template-columns: 1fr 1fr !important; }
         }
         @media (max-width: 640px) {
           .mm-features-grid { grid-template-columns: 1fr !important; }
+          .mm-landing-cats { grid-template-columns: 1fr !important; }
+          .mm-landing-preview { box-shadow: 6px 6px 0 rgba(0,0,0,0.4) !important; }
         }
       `}</style>
     </div>
