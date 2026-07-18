@@ -1,8 +1,8 @@
 // Tokens & types
 export { T, TAG_COLORS, ACCENTS } from "./tokens";
 export type { TokenKey } from "./tokens";
-export type { Bookmark, Category, User, MockUserEntry, AppStats } from "./tokens/types";
-export { DEMO_DATA, MOCK_USERS } from "./tokens/demo-data";
+export type { Bookmark, Category, User, AppStats } from "./tokens/types";
+export { DEMO_DATA } from "./tokens/demo-data";
 
 // Utilities
 export { uid, getDomain, getFavicon, tagColor, timeAgo } from "./lib/helpers";

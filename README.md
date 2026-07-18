@@ -93,14 +93,12 @@ pnpm --filter @markme/extension dev
 
 Load `apps/extension/dist` as an unpacked extension in `chrome://extensions`. Set `VITE_API_URL` to your web origin.
 
-### Demo login (UI)
+### Auth
 
-When using the in-app mock credentials surface:
+Sign-in uses Auth.js against your Postgres (Neon) users table:
 
-| Email            | Password  | Plan |
-| ---------------- | --------- | ---- |
-| `demo@markme.io` | `mark_me1`| Pro  |
-| `free@markme.io` | `test123` | Free |
+- **Google** / **GitHub** — set the OAuth client env vars in `apps/web/.env.local`
+- **Email magic link** — set `RESEND_API_KEY` and `EMAIL_FROM`
 
 ## Scripts
 

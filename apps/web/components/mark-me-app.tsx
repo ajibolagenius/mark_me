@@ -1,10 +1,12 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { signIn, signOut, useSession } from "next-auth/react";
 import {
-  T, TAG_COLORS, ACCENTS, DEMO_DATA, MOCK_USERS,
+  T, TAG_COLORS, ACCENTS, MOCK_USERS,
   Logo, Atmosphere,
   uid, getDomain, getFavicon, tagColor,
 } from "@markme/ui";
+import { trpc } from "@/lib/trpc";
 
 /* ── Relative time formatter ── */
 function timeAgo(ts) {
@@ -1024,7 +1026,7 @@ function LandingPage({ onNavigate }) {
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: AUTH (Login / Signup)
    ══════════════════════════════════════════════════════════════════════════ */
-function AuthPage({ mode, onNavigate, onLogin }) {
+function AuthPage({ mode, onNavigate }) {
   const isLogin = mode === "login";
   const [email, setEmail] = useState(isLogin ? "demo@markme.io" : "");
   const [pass, setPass] = useState(isLogin ? "mark_me1" : "");
@@ -1033,29 +1035,46 @@ function AuthPage({ mode, onNavigate, onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [gLoading, setGLoading] = useState(false);
+  const [ghLoading, setGhLoading] = useState(false);
 
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault();
     setError("");
     if (!email.includes("@")) { setError("Enter a valid email"); return; }
     if (pass.length < 6) { setError("Password must be 6+ characters"); return; }
     if (!isLogin && !name.trim()) { setError("Name is required"); return; }
     setLoading(true);
-    setTimeout(() => {
-      if (isLogin) {
-        const mock = MOCK_USERS[email.toLowerCase()];
-        if (mock && mock.password === pass) {
-          onLogin({ name:mock.name, email, avatar:null, plan:mock.plan, joinedAt:mock.joinedAt });
-        } else if (mock) {
-          setError("Incorrect password"); setLoading(false); return;
-        } else {
-          onLogin({ name:email.split("@")[0], email, avatar:null, plan:"free", joinedAt:new Date().toISOString() });
-        }
-      } else {
-        onLogin({ name:name||email.split("@")[0], email, avatar:null, plan:"free", joinedAt:new Date().toISOString() });
+    try {
+      // Demo credentials are Auth.js → Neon (authorizeWithDemoCredentials).
+      // Signup uses the same path for seeded demo accounts; arbitrary signup needs OAuth.
+      const res = await signIn("credentials", {
+        email: email.toLowerCase().trim(),
+        password: pass,
+        redirect: false,
+      });
+      if (res?.error) {
+        setError(isLogin
+          ? "Invalid email or password. Try the demo accounts below, or Google / GitHub."
+          : "Account creation via password is limited to demo users. Use Google / GitHub, or sign in with a demo account.");
+        return;
       }
+      onNavigate("dashboard");
+    } catch {
+      setError("Sign-in failed. Check that DATABASE_URL is set and the server is running.");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
+  };
+
+  const oauth = async (provider, setBusy) => {
+    setError("");
+    setBusy(true);
+    try {
+      await signIn(provider, { callbackUrl: "/" });
+    } catch {
+      setError(`${provider === "google" ? "Google" : "GitHub"} sign-in failed. Check OAuth env vars.`);
+      setBusy(false);
+    }
   };
 
   return (
@@ -1084,7 +1103,7 @@ function AuthPage({ mode, onNavigate, onLogin }) {
             {isLogin && (
               <div style={{ background:T.secondarySubtle, border:`1px solid ${T.secondary}30`, padding:"12px 14px", marginBottom:18 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:T.secondary, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
-                  <I.Zap /> Demo credentials
+                  <I.Zap /> Demo credentials (Neon)
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                   {Object.entries(MOCK_USERS).map(([em,u])=>(
@@ -1125,15 +1144,21 @@ function AuthPage({ mode, onNavigate, onLogin }) {
             <div style={{ flex:1, height:1, background:T.border }} />
           </div>
 
-          {/* Social auth */}
-          <button onClick={()=>{setGLoading(true);setTimeout(()=>setGLoading(false),2000)}} disabled={gLoading}
-            style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:gLoading?T.textMuted:T.textSec, border:`1px solid ${T.border}`, fontSize:13, opacity:gLoading?0.7:1, transition:"all 0.2s" }}
-            onMouseEnter={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}} onMouseLeave={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}}>
-            {gLoading
-              ? <div style={{ width:16, height:16, border:`2px solid ${T.textMuted}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite" }} />
-              : <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>}
-            {gLoading ? "Connecting..." : "Continue with Google"}
-          </button>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <button type="button" onClick={()=>oauth("google", setGLoading)} disabled={gLoading}
+              style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:gLoading?T.textMuted:T.textSec, border:`1px solid ${T.border}`, fontSize:13, opacity:gLoading?0.7:1, transition:"all 0.2s" }}
+              onMouseEnter={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}} onMouseLeave={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}}>
+              {gLoading
+                ? <div style={{ width:16, height:16, border:`2px solid ${T.textMuted}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite" }} />
+                : <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>}
+              {gLoading ? "Connecting..." : "Continue with Google"}
+            </button>
+            <button type="button" onClick={()=>oauth("github", setGhLoading)} disabled={ghLoading}
+              style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:ghLoading?T.textMuted:T.textSec, border:`1px solid ${T.border}`, fontSize:13, opacity:ghLoading?0.7:1, transition:"all 0.2s" }}
+              onMouseEnter={e=>{if(!ghLoading){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}} onMouseLeave={e=>{if(!ghLoading){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}}>
+              {ghLoading ? "Connecting..." : "Continue with GitHub"}
+            </button>
+          </div>
 
           <p style={{ textAlign:"center", marginTop:24, fontSize:13, color:T.textMuted }}>
             {isLogin ? "Don't have an account? " : "Already have an account? "}
@@ -1155,13 +1180,40 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { flash, ToastEl } = useUndoToast();
+  const updateProfile = trpc.user.updateProfile.useMutation();
+  const deleteAccount = trpc.user.deleteAccount.useMutation();
 
-  const save = () => {
-    onUpdate({ ...user, name, email });
-    setSaved(true);
-    flash("Profile updated ✓");
-    setTimeout(() => setSaved(false), 2000);
+  const save = async () => {
+    try {
+      const updated = await updateProfile.mutateAsync({ name: name.trim(), email: email.trim().toLowerCase() });
+      onUpdate({
+        ...user,
+        name: updated.name,
+        email: updated.email,
+        avatar: updated.avatarUrl ?? null,
+        plan: updated.plan,
+        joinedAt: updated.createdAt instanceof Date ? updated.createdAt.toISOString() : user.joinedAt,
+      });
+      setSaved(true);
+      flash("Profile updated ✓");
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      flash(err?.message || "Could not update profile");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm("Permanently delete your account and all bookmarks? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await deleteAccount.mutateAsync();
+      await onLogout();
+    } catch (err) {
+      flash(err?.message || "Could not delete account");
+      setDeleting(false);
+    }
   };
 
   const plans = [
@@ -1276,9 +1328,9 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
         <div style={{ background:T.bgEl, border:`1px solid ${T.error}25`, padding:24, animation:"mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 400ms both" }}>
           <h3 style={{ fontSize:14, fontWeight:800, color:T.error, marginBottom:8, letterSpacing:"-0.02em" }}>Danger Zone</h3>
           <p style={{ fontSize:12, color:T.textMuted, marginBottom:16, lineHeight:1.5 }}>Permanently delete your account and all associated data. This action cannot be undone.</p>
-          <button aria-label="Delete account permanently" style={{ ...S.btn, background:"transparent", color:T.error, padding:"8px 16px", border:`1px solid ${T.error}40`, fontSize:12 }}
+          <button type="button" onClick={handleDeleteAccount} disabled={deleting} aria-label="Delete account permanently" style={{ ...S.btn, background:"transparent", color:T.error, padding:"8px 16px", border:`1px solid ${T.error}40`, fontSize:12, opacity:deleting?0.6:1 }}
             onMouseEnter={e=>{e.currentTarget.style.background=T.error+"15"}} onMouseLeave={e=>{e.currentTarget.style.background="transparent"}}>
-            Delete Account
+            {deleting ? "Deleting…" : "Delete Account"}
           </button>
         </div>
       </main>
@@ -1366,7 +1418,7 @@ function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
   );
 }
 
-const CatCard = React.memo(function CatCard({ cat, onUpdate, onDelete, onEdit, onDeleteBm, allTags, searchQuery }) {
+const CatCard = React.memo(function CatCard({ cat, onTogglePin, onSaveBm, onDelete, onEdit, onDeleteBm, allTags, searchQuery }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
   const isMobile = useIsMobile();
@@ -1427,7 +1479,7 @@ const CatCard = React.memo(function CatCard({ cat, onUpdate, onDelete, onEdit, o
           </div>
         ) : (<>
         {sorted.map((bm,bi)=>{
-          const bmRow = <BookmarkRow bm={bm} accent={cat.color} searchQuery={q} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===id?{...b,pinned:!b.pinned}:b)})} />;
+          const bmRow = <BookmarkRow bm={bm} accent={cat.color} searchQuery={q} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onTogglePin(id)} />;
           return (
             <div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}>
               {isMobile
@@ -1441,8 +1493,8 @@ const CatCard = React.memo(function CatCard({ cat, onUpdate, onDelete, onEdit, o
         </>)}
         </div>
       </AnimatedCollapse>
-      <BmModal open={addBm} onClose={()=>setAddBm(false)} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:[...cat.bookmarks,{...bm,id:uid(),addedAt:Date.now()}]});setAddBm(false)}} allTags={allTags} />
-      <BmModal open={!!editBm} onClose={()=>setEditBm(null)} bm={editBm} accent={cat.color} onSave={bm=>{onUpdate({...cat,bookmarks:cat.bookmarks.map(b=>b.id===bm.id?bm:b)});setEditBm(null)}} allTags={allTags} />
+      <BmModal open={addBm} onClose={()=>setAddBm(false)} accent={cat.color} onSave={bm=>{onSaveBm(cat.id, bm); setAddBm(false)}} allTags={allTags} />
+      <BmModal open={!!editBm} onClose={()=>setEditBm(null)} bm={editBm} accent={cat.color} onSave={bm=>{onSaveBm(cat.id, bm); setEditBm(null)}} allTags={allTags} />
     </article>
   );
 });
@@ -2112,6 +2164,7 @@ function AiPanel({ open, onClose, categories }) {
    APP ROOT — ROUTER
    ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
+  const { data: session, status } = useSession();
   const [page, setPage] = useState("landing");
   const [user, setUser] = useState(null);
   const [categories, setCategories] = useState(() => {
@@ -2121,8 +2174,28 @@ export default function App() {
   useEffect(() => { try { sessionStorage.setItem("mm_cats", JSON.stringify(categories)); } catch {} }, [categories]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [page]);
 
-  const login = userData => { setUser(userData); setPage("dashboard"); };
-  const logout = () => { setUser(null); setPage("landing"); };
+  // Hydrate from Auth.js session (Neon-backed users via OAuth / magic link)
+  useEffect(() => {
+    if (status === "loading") return;
+    if (session?.user) {
+      setUser({
+        name: session.user.name || session.user.email?.split("@")[0] || "User",
+        email: session.user.email || "",
+        avatar: session.user.image || null,
+        plan: session.user.plan || "free",
+        joinedAt: session.user.joinedAt || new Date().toISOString(),
+      });
+      setPage(p => (p === "landing" || p === "login" || p === "signup" ? "dashboard" : p));
+    } else if (status === "unauthenticated") {
+      setUser(null);
+    }
+  }, [session, status]);
+
+  const logout = async () => {
+    await signOut({ redirect: false });
+    setUser(null);
+    setPage("landing");
+  };
   const navigate = p => setPage(p);
 
   const appStats = {
@@ -2152,8 +2225,8 @@ export default function App() {
         {page === "landing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The landing page encountered an error."><LandingPage onNavigate={navigate} /></ErrorBoundary>}
         {page === "pricing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The pricing page encountered an error."><PricingPage onNavigate={navigate} /></ErrorBoundary>}
         {page === "newtab" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The new tab page encountered an error."><NewTabPage onNavigate={navigate} categories={categories} /></ErrorBoundary>}
-        {page === "login" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The login form encountered an error."><AuthPage mode="login" onNavigate={navigate} onLogin={login} /></ErrorBoundary>}
-        {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} onLogin={login} /></ErrorBoundary>}
+        {page === "login" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The login form encountered an error."><AuthPage mode="login" onNavigate={navigate} /></ErrorBoundary>}
+        {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} /></ErrorBoundary>}
         {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
         {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} categories={categories} setCategories={setCategories} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
         {page === "dashboard" && !user && (() => { setPage("login"); return null; })()}
