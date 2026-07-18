@@ -10,12 +10,12 @@
  */
 
 import {
-  type AuthState,
-  dequeueOffline,
-  enqueueOffline,
-  getAuth,
-  getOfflineQueue,
-  setAuth,
+    type AuthState,
+    dequeueOffline,
+    enqueueOffline,
+    getAuth,
+    getOfflineQueue,
+    setAuth,
 } from "../lib/storage";
 import { createVanillaClient } from "../lib/trpc";
 
@@ -27,12 +27,12 @@ const CONTEXT_MENU_LINK_ID = "markme-save-link";
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(() => {
-  setupContextMenus();
+    setupContextMenus();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  setupContextMenus();
-  drainOfflineQueue();
+    setupContextMenus();
+    drainOfflineQueue();
 });
 
 // ---------------------------------------------------------------------------
@@ -40,35 +40,36 @@ chrome.runtime.onStartup.addListener(() => {
 // ---------------------------------------------------------------------------
 
 function setupContextMenus() {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: CONTEXT_MENU_ID,
-      title: "Save page to mark_me",
-      contexts: ["page"],
+    if (!chrome.contextMenus) return;
+    chrome.contextMenus.removeAll(() => {
+        chrome.contextMenus.create({
+            id: CONTEXT_MENU_ID,
+            title: "Save page to mark_me",
+            contexts: ["page"],
+        });
+        chrome.contextMenus.create({
+            id: CONTEXT_MENU_LINK_ID,
+            title: "Save link to mark_me",
+            contexts: ["link"],
+        });
     });
-    chrome.contextMenus.create({
-      id: CONTEXT_MENU_LINK_ID,
-      title: "Save link to mark_me",
-      contexts: ["link"],
-    });
-  });
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const auth = await getAuth();
-  if (!auth) {
-    // Cannot open popup programmatically in all Chrome versions; ignore
-    return;
-  }
+    const auth = await getAuth();
+    if (!auth) {
+        // Cannot open popup programmatically in all Chrome versions; ignore
+        return;
+    }
 
-  const isLink = info.menuItemId === CONTEXT_MENU_LINK_ID;
-  const url = (isLink ? info.linkUrl : info.pageUrl) ?? "";
-  // linkText is not in all Chrome versions; fall back to selectionText or url
-  const title = isLink
-    ? ((info as unknown as { linkText?: string }).linkText ?? info.selectionText ?? url)
-    : (tab?.title ?? url);
+    const isLink = info.menuItemId === CONTEXT_MENU_LINK_ID;
+    const url = (isLink ? info.linkUrl : info.pageUrl) ?? "";
+    // linkText is not in all Chrome versions; fall back to selectionText or url
+    const title = isLink
+        ? ((info as unknown as { linkText?: string }).linkText ?? info.selectionText ?? url)
+        : (tab?.title ?? url);
 
-  await saveBookmark({ auth, url, title });
+    await saveBookmark({ auth, url, title });
 });
 
 // ---------------------------------------------------------------------------
@@ -76,25 +77,25 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onMessageExternal.addListener(
-  (message: unknown, _sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
-    if (
-      typeof message === "object" &&
-      message !== null &&
-      (message as Record<string, unknown>).type === "MARKME_AUTH"
-    ) {
-      const { token, userId, expiresAt } = message as {
-        type: string;
-        token: string;
-        userId: string;
-        expiresAt: number;
-      };
-      const auth: AuthState = { token, userId, expiresAt };
-      setAuth(auth)
-        .then(() => sendResponse({ ok: true }))
-        .catch(() => sendResponse({ ok: false }));
-      return true; // keep channel open for async response
-    }
-  },
+    (message: unknown, _sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
+        if (
+            typeof message === "object" &&
+            message !== null &&
+            (message as Record<string, unknown>).type === "MARKME_AUTH"
+        ) {
+            const { token, userId, expiresAt } = message as {
+                type: string;
+                token: string;
+                userId: string;
+                expiresAt: number;
+            };
+            const auth: AuthState = { token, userId, expiresAt };
+            setAuth(auth)
+                .then(() => sendResponse({ ok: true }))
+                .catch(() => sendResponse({ ok: false }));
+            return true; // keep channel open for async response
+        }
+    },
 );
 
 // ---------------------------------------------------------------------------
@@ -102,54 +103,56 @@ chrome.runtime.onMessageExternal.addListener(
 // ---------------------------------------------------------------------------
 
 async function drainOfflineQueue() {
-  const auth = await getAuth();
-  if (!auth) return;
+    const auth = await getAuth();
+    if (!auth) return;
 
-  const queue = await getOfflineQueue();
-  if (queue.length === 0) return;
+    const queue = await getOfflineQueue();
+    if (queue.length === 0) return;
 
-  const client = createVanillaClient(auth.token);
+    const client = createVanillaClient(auth.token);
 
-  for (const item of queue) {
-    if (!item.categoryId) {
-      // Cannot save without a category; remove stale item
-      await dequeueOffline(item.id);
-      continue;
+    for (const item of queue) {
+        if (!item.categoryId) {
+            // Cannot save without a category; remove stale item
+            await dequeueOffline(item.id);
+            continue;
+        }
+        try {
+            await client.bookmark.create.mutate({
+                categoryId: item.categoryId,
+                url: item.url,
+                title: item.title,
+                tags: item.tags,
+                note: item.notes,
+                pinned: false,
+                faviconUrl: null,
+            });
+            await dequeueOffline(item.id);
+        } catch {
+            // Leave in queue; retry on next wake
+            break;
+        }
     }
-    try {
-      await client.bookmark.create.mutate({
-        categoryId: item.categoryId,
-        url: item.url,
-        title: item.title,
-        tags: item.tags,
-        note: item.notes,
-        pinned: false,
-        faviconUrl: null,
-      });
-      await dequeueOffline(item.id);
-    } catch {
-      // Leave in queue; retry on next wake
-      break;
-    }
-  }
 }
 
 // Periodic alarm-based drain (every 5 minutes when the SW is awake)
-chrome.alarms.create("markme-sync", { periodInMinutes: 5 });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "markme-sync") {
-    drainOfflineQueue();
-  }
-});
+if (chrome.alarms) {
+    chrome.alarms.create("markme-sync", { periodInMinutes: 5 });
+    chrome.alarms.onAlarm.addListener((alarm) => {
+        if (alarm.name === "markme-sync") {
+            drainOfflineQueue();
+        }
+    });
+}
 
 // ---------------------------------------------------------------------------
 // chrome.bookmarks.onCreated — currently a no-op; user saves explicitly via popup
 // ---------------------------------------------------------------------------
 
 chrome.bookmarks.onCreated.addListener((_id, bookmark) => {
-  // Intentionally not auto-saving: the popup provides intentional, categorized saves.
-  // Remove this listener if you want to auto-mirror browser bookmarks.
-  void bookmark;
+    // Intentionally not auto-saving: the popup provides intentional, categorized saves.
+    // Remove this listener if you want to auto-mirror browser bookmarks.
+    void bookmark;
 });
 
 // ---------------------------------------------------------------------------
@@ -157,46 +160,48 @@ chrome.bookmarks.onCreated.addListener((_id, bookmark) => {
 // ---------------------------------------------------------------------------
 
 async function saveBookmark({
-  auth,
-  url,
-  title,
+    auth,
+    url,
+    title,
 }: {
-  auth: AuthState;
-  url: string;
-  title: string;
+    auth: AuthState;
+    url: string;
+    title: string;
 }) {
-  const client = createVanillaClient(auth.token);
+    const client = createVanillaClient(auth.token);
 
-  try {
-    const cats = await client.category.list.query();
-    const categoryId = cats[0]?.id;
-    if (!categoryId) return;
+    try {
+        const cats = await client.category.list.query();
+        const categoryId = cats[0]?.id;
+        if (!categoryId) return;
 
-    await client.bookmark.create.mutate({
-      categoryId,
-      url,
-      title,
-      tags: [],
-      note: "",
-      pinned: false,
-      faviconUrl: null,
-    });
+        await client.bookmark.create.mutate({
+            categoryId,
+            url,
+            title,
+            tags: [],
+            note: "",
+            pinned: false,
+            faviconUrl: null,
+        });
 
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon48.png",
-      title: "mark_me",
-      message: `"${title.slice(0, 60)}" saved.`,
-    });
-  } catch {
-    await enqueueOffline({
-      id: crypto.randomUUID(),
-      url,
-      title,
-      categoryId: "",
-      tags: [],
-      notes: "",
-      savedAt: Date.now(),
-    });
-  }
+        if (chrome.notifications) {
+            chrome.notifications.create({
+                type: "basic",
+                iconUrl: "icons/icon48.png",
+                title: "mark_me",
+                message: `"${title.slice(0, 60)}" saved.`,
+            });
+        }
+    } catch {
+        await enqueueOffline({
+            id: crypto.randomUUID(),
+            url,
+            title,
+            categoryId: "",
+            tags: [],
+            notes: "",
+            savedAt: Date.now(),
+        });
+    }
 }
