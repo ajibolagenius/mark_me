@@ -6,8 +6,8 @@
       x1/y1 = top-left of 'm', x2/y2 = bottom-right of 'e'.
     -->
     <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="47" y1="80" x2="157" y2="122">
-      <stop offset="0%" stop-color="#A855F7"/>
-      <stop offset="100%" stop-color="#22D3EE"/>
+      <stop offset="0%" stop-color="#D4FF4F"/>
+      <stop offset="100%" stop-color="#FF4F7B"/>
     </linearGradient>
   </defs>
   <rect width="204" height="204" fill="#0D0D0D"/>

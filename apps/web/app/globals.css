@@ -1,23 +1,13 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@import "tailwindcss";
+@import "@markme/ui/styles";
+
+/* Scan @markme/ui so shared Tailwind classes generate */
+@source "../../../packages/ui/src";
 
 body {
-  background: #0D0D0D;
+  background: var(--color-mm-bg);
+  color: var(--color-mm-text);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-::-webkit-scrollbar {
-  width: 4px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
 }

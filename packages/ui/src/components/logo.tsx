@@ -25,8 +25,8 @@ export function Logo({ size = 28, wordmark = true }: LogoProps) {
             x2="157"
             y2="122"
           >
-            <stop offset="0%" stopColor="#A855F7" />
-            <stop offset="100%" stopColor="#22D3EE" />
+            <stop offset="0%" stopColor="#D4FF4F" />
+            <stop offset="100%" stopColor="#FF4F7B" />
           </linearGradient>
         </defs>
         <rect width="204" height="204" fill="#0D0D0D" />

@@ -1,71 +1,10 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-
-/* ══════════════════════════════════════════════════════════════════════════
-   DESIGN TOKENS
-   ══════════════════════════════════════════════════════════════════════════ */
-const T = {
-  bg: "#0D0D0D", bgEl: "#161616", bgPanel: "#1a1a1a", bgInput: "rgba(255,255,255,0.04)",
-  border: "rgba(255,255,255,0.08)", borderStrong: "rgba(255,255,255,0.14)",
-  primary: "#A855F7", primarySoft: "rgba(168,85,247,0.25)", primaryGlow: "rgba(168,85,247,0.35)", primarySubtle: "rgba(168,85,247,0.08)",
-  secondary: "#22D3EE", secondarySoft: "rgba(34,211,238,0.2)", secondaryGlow: "rgba(34,211,238,0.25)", secondarySubtle: "rgba(34,211,238,0.06)",
-  text: "#FFFFFF", textSec: "rgba(255,255,255,0.7)", textMuted: "rgba(255,255,255,0.5)",
-  success: "#22C55E", error: "#EF4444", warning: "#F59E0B",
-  font: "'Plus Jakarta Sans', system-ui, sans-serif",
-};
-
-const TAG_COLORS = ["#A855F7","#22D3EE","#22C55E","#F59E0B","#EF4444","#EC4899","#6366F1","#14B8A6","#F97316","#84CC16"];
-const ACCENTS = [
-  { bg: "#A855F7", glow: "rgba(168,85,247,0.25)" },
-  { bg: "#22D3EE", glow: "rgba(34,211,238,0.25)" },
-  { bg: "#22C55E", glow: "rgba(34,197,94,0.25)" },
-  { bg: "#F59E0B", glow: "rgba(245,158,11,0.25)" },
-  { bg: "#EF4444", glow: "rgba(239,68,68,0.25)" },
-  { bg: "#EC4899", glow: "rgba(236,72,153,0.25)" },
-  { bg: "#6366F1", glow: "rgba(99,102,241,0.25)" },
-  { bg: "#14B8A6", glow: "rgba(20,184,166,0.25)" },
-];
-
-const _now = Date.now();
-const _h = n => _now - n * 3600000;
-const _d = n => _now - n * 86400000;
-
-const DEMO_DATA = [
-  { id:"c1", name:"Design Inspiration", color:0, icon:"🎨", tags:["design","ui/ux"], bookmarks:[
-    { id:"b1", title:"Dribbble", url:"https://dribbble.com", tags:["design"], note:"Daily design inspiration", pinned:true, addedAt:_d(2) },
-    { id:"b2", title:"Behance", url:"https://behance.net", tags:["design"], note:"Portfolio showcase", addedAt:_d(5) },
-    { id:"b3", title:"Awwwards", url:"https://awwwards.com", tags:["ui/ux"], note:"Award-winning websites", addedAt:_d(12) },
-  ]},
-  { id:"c2", name:"Dev Tools", color:1, icon:"⚡", tags:["dev","tools"], bookmarks:[
-    { id:"b4", title:"GitHub", url:"https://github.com", tags:["dev"], note:"Code hosting", pinned:true, addedAt:_h(3) },
-    { id:"b5", title:"VS Code Web", url:"https://vscode.dev", tags:["tools"], note:"Browser-based IDE", addedAt:_d(1) },
-    { id:"b6", title:"CodePen", url:"https://codepen.io", tags:["dev"], note:"Frontend playground", addedAt:_d(7) },
-    { id:"b7", title:"Stack Overflow", url:"https://stackoverflow.com", tags:["dev"], note:"Q&A for devs", addedAt:_d(30) },
-  ]},
-  { id:"c3", name:"Reading List", color:5, icon:"📚", tags:["articles"], bookmarks:[
-    { id:"b8", title:"Medium", url:"https://medium.com", tags:["articles"], note:"Blog platform", addedAt:_d(3) },
-    { id:"b9", title:"Dev.to", url:"https://dev.to", tags:["articles"], note:"Developer community", addedAt:_d(14) },
-  ]},
-  { id:"c4", name:"Productivity", color:2, icon:"🚀", tags:["work","apps"], bookmarks:[
-    { id:"b10", title:"Notion", url:"https://notion.so", tags:["work"], note:"All-in-one workspace", pinned:true, addedAt:_h(1) },
-    { id:"b11", title:"Linear", url:"https://linear.app", tags:["work"], note:"Issue tracking", addedAt:_d(4) },
-    { id:"b12", title:"Figma", url:"https://figma.com", tags:["apps"], note:"Design tool", addedAt:_d(20) },
-  ]},
-  { id:"c5", name:"Entertainment", color:4, icon:"🎬", tags:["fun","media"], bookmarks:[
-    { id:"b13", title:"YouTube", url:"https://youtube.com", tags:["media"], note:"Video platform", addedAt:_d(6) },
-    { id:"b14", title:"Spotify", url:"https://spotify.com", tags:["fun"], note:"Music streaming", addedAt:_d(10) },
-  ]},
-  { id:"c6", name:"AI & ML", color:6, icon:"🤖", tags:["ai","research"], bookmarks:[
-    { id:"b15", title:"Hugging Face", url:"https://huggingface.co", tags:["ai"], note:"ML models hub", pinned:true, addedAt:_h(6) },
-    { id:"b16", title:"Papers With Code", url:"https://paperswithcode.com", tags:["research"], note:"ML papers + code", addedAt:_d(8) },
-    { id:"b17", title:"Anthropic", url:"https://anthropic.com", tags:["ai"], note:"AI safety", addedAt:_d(15) },
-  ]},
-];
-
-const uid = () => `id-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-const getDomain = u => { try { return new URL(u).hostname.replace("www.",""); } catch { return ""; } };
-const getFavicon = u => `https://www.google.com/s2/favicons?domain=${getDomain(u)}&sz=32`;
-const tagColor = t => TAG_COLORS[t.split("").reduce((a,c) => a + c.charCodeAt(0), 0) % TAG_COLORS.length];
+import {
+  T, TAG_COLORS, ACCENTS, DEMO_DATA, MOCK_USERS,
+  Logo, Atmosphere,
+  uid, getDomain, getFavicon, tagColor,
+} from "@markme/ui";
 
 /* ── Relative time formatter ── */
 function timeAgo(ts) {
@@ -207,25 +146,6 @@ const S = {
   btn: { display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:T.font, fontWeight:600, fontSize:13, cursor:"pointer", transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)", border:"none", borderRadius:0, textDecoration:"none" },
   input: { width:"100%", padding:"12px 14px", background:T.bgInput, border:`1px solid ${T.border}`, borderRadius:0, color:T.text, fontSize:14, fontFamily:T.font, outline:"none", boxSizing:"border-box", transition:"border-color 0.2s" },
 };
-
-/* Noise + Glows */
-const Atmosphere = () => (
-  <>
-    <div style={{ position:"fixed", inset:0, pointerEvents:"none", zIndex:0, opacity:0.025, backgroundImage:"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")" }} />
-    <div style={{ position:"fixed", top:-100, left:-100, width:300, height:300, borderRadius:"50%", background:T.primary, filter:"blur(120px)", opacity:0.06, pointerEvents:"none" }} />
-    <div style={{ position:"fixed", bottom:-80, right:-80, width:250, height:250, borderRadius:"50%", background:T.secondary, filter:"blur(100px)", opacity:0.05, pointerEvents:"none" }} />
-  </>
-);
-
-/* Logo */
-const Logo = ({ size = 28 }) => (
-  <div style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
-    <div style={{ width:size, height:size, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <span style={{ fontSize:size*0.55, filter:"brightness(2)" }}>🔖</span>
-    </div>
-    <span style={{ fontWeight:800, fontSize:size*0.6, letterSpacing:"-0.04em", fontFamily:T.font }}>mark<span style={{ color:T.primary }}>_</span>me</span>
-  </div>
-);
 
 /* Modal — desktop: centered dialog, mobile: bottom sheet with drag handle */
 function Modal({ open, onClose, title, children, wide }) {
@@ -417,7 +337,7 @@ function useUndoToast() {
           <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
             <span style={{ fontSize:11, color:T.textMuted, fontVariantNumeric:"tabular-nums", minWidth:16, textAlign:"center" }}>{secs}s</span>
             <button onClick={handleUndo} aria-label="Undo delete" style={{
-              ...S.btn, background:T.primary, color:"#fff", padding:"5px 12px", fontSize:12, fontWeight:800,
+              ...S.btn, background:T.primary, color:T.onPrimary, padding:"5px 12px", fontSize:12, fontWeight:800,
             }}
               onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}
             >Undo</button>
@@ -646,7 +566,7 @@ function useFocusTrap(active) {
 /* ── Skip to content link (screen reader shortcut) ── */
 const SkipLink = () => (
   <a href="#main-content" style={{
-    position:"absolute", top:-40, left:0, background:T.primary, color:"#fff",
+    position:"absolute", top:-40, left:0, background:T.primary, color:T.onPrimary,
     padding:"8px 16px", zIndex:9999, fontSize:13, fontWeight:700, fontFamily:T.font,
     transition:"top 0.2s", textDecoration:"none",
   }} onFocus={e=>e.currentTarget.style.top="0"} onBlur={e=>e.currentTarget.style.top="-40px"}>
@@ -959,18 +879,9 @@ function LandingPage({ onNavigate }) {
     { icon: <I.Grid />, title: "Masonry Grid", desc: "Visual bento layout that makes browsing your links feel intentional" },
     { icon: <I.Tag />, title: "Smart Tags", desc: "Color-coded pills to slice and filter your collection instantly" },
     { icon: <I.Bookmark />, title: "Pin & Organize", desc: "Pin your most-used links, group by category, drag to reorder" },
-    { icon: <I.Chrome />, title: "Chrome Extension", desc: "One-click save from any page — auto-tagged, auto-categorized", soon: true },
-    { icon: <I.Cloud />, title: "Cloud Sync", desc: "Firebase-backed storage keeps your bookmarks safe across devices", soon: true },
-    { icon: <I.Layout />, title: "Bio Website", desc: "Generate a sleek link-in-bio page from your public bookmarks", soon: true },
     { icon: <I.Tab />, title: "New Tab Override", desc: "Replace Chrome's new tab with your bookmarks, clock, and quick search", isNew: true },
     { icon: <I.Sparkle />, title: "AI Assistant", desc: "Auto-tag, summarize, and discover connections across your bookmarks", isNew: true },
-  ];
-
-  const stats = [
-    { val: "12K+", label: "Bookmarks saved" },
-    { val: "2.4K", label: "Active users" },
-    { val: "99.9%", label: "Uptime" },
-    { val: "< 50ms", label: "Load time" },
+    { icon: <I.Chrome />, title: "Chrome Extension", desc: "One-click save from any page — auto-tagged, auto-categorized", soon: true },
   ];
 
   return (
@@ -1021,22 +932,29 @@ function LandingPage({ onNavigate }) {
 
         {/* Preview mockup */}
         <div style={{ marginTop:60, background:T.bgEl, border:`1px solid ${T.border}`, padding:3, boxShadow:"8px 8px 0 rgba(0,0,0,0.4)", position:"relative", animation:"mmCardSpring .6s cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both", overflow:"hidden" }}>
-          <div style={{ position:"absolute", top:-30, left:"20%", width:200, height:200, borderRadius:"50%", background:T.primary, filter:"blur(80px)", opacity:0.08 }} />
-          <div style={{ position:"absolute", bottom:-30, right:"20%", width:180, height:180, borderRadius:"50%", background:T.secondary, filter:"blur(70px)", opacity:0.06 }} />
           <div style={{ background:T.bgPanel, padding:"12px 16px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:8 }} aria-hidden="true">
             <div style={{ display:"flex", gap:5 }}>{[T.error,"#F59E0B",T.success].map((c,i)=><div key={i} style={{ width:8, height:8, borderRadius:"50%", background:c, opacity:0.6 }} />)}</div>
             <div style={{ flex:1, background:T.bgInput, border:`1px solid ${T.border}`, padding:"4px 10px", fontSize:11, color:T.textMuted }}>app.markme.io/dashboard</div>
           </div>
-          <div style={{ padding:20, display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, minHeight:180 }}>
-            {[0,1,2,3,4,5].map(i => {
+          <div style={{ padding:20, display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, minHeight:180 }} aria-hidden="true">
+            {[
+              { title:"Dribbble", note:"Daily design inspiration", tags:["design","ui/ux"] },
+              { title:"GitHub", note:"Code hosting & collab", tags:["dev"] },
+              { title:"Notion", note:"All-in-one workspace", tags:["work","apps"] },
+              { title:"Figma", note:"Design tool of choice", tags:["design"] },
+              { title:"Hugging Face", note:"ML models hub", tags:["ai","research"] },
+              { title:"Linear", note:"Issue tracking done right", tags:["work"] },
+            ].map((card, i) => {
               const ac = ACCENTS[i % ACCENTS.length];
               return (
-                <div key={i} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", minHeight: i%3===0 ? 120 : 80 }}>
+                <div key={i} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", minHeight: i%3===0 ? 120 : 80, textAlign:"left" }}>
                   <div style={{ height:3, background:ac.bg }} />
                   <div style={{ padding:10 }}>
-                    <div style={{ width:"60%", height:8, background:"rgba(255,255,255,0.08)", marginBottom:6 }} />
-                    <div style={{ width:"40%", height:6, background:"rgba(255,255,255,0.04)" }} />
-                    <div style={{ display:"flex", gap:3, marginTop:8 }}>{[0,1].map(j=><div key={j} style={{ width:28, height:10, background:ac.bg+"25", border:`1px solid ${ac.bg}30` }} />)}</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4, letterSpacing:"-0.02em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{card.title}</div>
+                    <div style={{ fontSize:10, color:T.textMuted, marginBottom:8, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{card.note}</div>
+                    <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{card.tags.map(t=>(
+                      <span key={t} style={{ fontSize:9, fontWeight:700, color:ac.bg, background:ac.bg+"18", border:`1px solid ${ac.bg}30`, padding:"1px 6px", textTransform:"uppercase", letterSpacing:"0.03em" }}>{t}</span>
+                    ))}</div>
                   </div>
                 </div>
               );
@@ -1045,25 +963,13 @@ function LandingPage({ onNavigate }) {
         </div>
       </section>
 
-      {/* Stats */}
-      <section style={{ maxWidth:1100, margin:"0 auto", padding:"40px 20px 60px", position:"relative", zIndex:1 }}>
-        <div className="mm-landing-stats" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:T.border }}>
-          {stats.map((s,i) => (
-            <div key={i} style={{ background:T.bg, padding:"28px 20px", textAlign:"center", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*70}ms both` }}>
-              <div style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", color:T.text, lineHeight:1 }}>{s.val}</div>
-              <div style={{ fontSize:11, fontWeight:600, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginTop:6 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Features */}
-      <section style={{ maxWidth:1100, margin:"0 auto", padding:"20px 20px 80px", position:"relative", zIndex:1 }}>
+      <section style={{ maxWidth:1100, margin:"0 auto", padding:"48px 20px 80px", position:"relative", zIndex:1 }}>
         <div style={{ textAlign:"center", marginBottom:48, animation:"mmSlideUp .4s ease both" }}>
           <h2 style={{ fontFamily:T.font, fontSize:"clamp(1.5rem, 3vw, 2rem)", fontWeight:800, letterSpacing:"-0.03em", marginBottom:12 }}>Everything you need.</h2>
           <p style={{ color:T.textSec, fontSize:15, maxWidth:400, margin:"0 auto" }}>A focused set of tools to replace the browser bookmark bar forever.</p>
         </div>
-        <div className="mm-features-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:T.border }}>
+        <div className="mm-features-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:1, background:T.border }}>
           {features.map((f,i) => (
             <div key={i} style={{ background:T.bg, padding:"32px 28px", position:"relative", overflow:"hidden", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*70}ms both`, transition:"background 0.2s" }}
               onMouseEnter={e=>e.currentTarget.style.background=T.bgEl} onMouseLeave={e=>e.currentTarget.style.background=T.bg}>
@@ -1107,9 +1013,8 @@ function LandingPage({ onNavigate }) {
         @media (max-width: 900px) {
           .mm-features-grid { grid-template-columns: repeat(2,1fr) !important; }
         }
-        @media (max-width: 768px) {
+        @media (max-width: 640px) {
           .mm-features-grid { grid-template-columns: 1fr !important; }
-          .mm-landing-stats { grid-template-columns: repeat(2,1fr) !important; }
         }
       `}</style>
     </div>
@@ -1119,12 +1024,6 @@ function LandingPage({ onNavigate }) {
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: AUTH (Login / Signup)
    ══════════════════════════════════════════════════════════════════════════ */
-/* Mock user accounts for testing */
-const MOCK_USERS = {
-  "demo@markme.io": { password:"mark_me1", name:"Ajibola Genius", plan:"pro", joinedAt:"2025-11-14T00:00:00.000Z" },
-  "free@markme.io": { password:"test123", name:"Free Tester", plan:"free", joinedAt:"2026-02-01T00:00:00.000Z" },
-};
-
 function AuthPage({ mode, onNavigate, onLogin }) {
   const isLogin = mode === "login";
   const [email, setEmail] = useState(isLogin ? "demo@markme.io" : "");
@@ -1298,7 +1197,7 @@ function ProfilePage({ user, onUpdate, onNavigate, onLogout, stats }) {
         {/* Profile section */}
         <div style={{ background:T.bgEl, border:`1px solid ${T.border}`, padding:28, marginBottom:20, boxShadow:"4px 4px 0 rgba(0,0,0,0.3)", animation:"mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 40ms both" }}>
           <div style={{ display:"flex", alignItems:"center", gap:20, marginBottom:24, flexWrap:"wrap" }}>
-            <div style={{ width:72, height:72, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, fontWeight:800, color:"#fff", flexShrink:0, position:"relative" }}>
+            <div style={{ width:72, height:72, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, fontWeight:800, color:T.onPrimary, flexShrink:0, position:"relative" }}>
               {user.name?.[0]?.toUpperCase() || "U"}
               <div role="button" tabIndex={0} aria-label="Upload profile photo" style={{ position:"absolute", bottom:-4, right:-4, width:24, height:24, background:T.bgPanel, border:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:T.textMuted }}>
                 <I.Camera />
@@ -1690,7 +1589,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
               onMouseUp={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}><I.Plus /> New</button>
             {/* Profile button */}
-            <button onClick={()=>onNavigate("profile")} aria-label={`Profile — ${user.name}`} style={{ ...S.btn, width:32, height:32, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, color:"#fff", fontSize:12, fontWeight:800, flexShrink:0 }}
+            <button onClick={()=>onNavigate("profile")} aria-label={`Profile — ${user.name}`} style={{ ...S.btn, width:32, height:32, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, color:T.onPrimary, fontSize:12, fontWeight:800, flexShrink:0 }}
               title="Profile">{user.name?.[0]?.toUpperCase()||"U"}</button>
           </div>
           <button className="mm-mob-btn" onClick={()=>setMobileNav(!mobileNav)} aria-label="Open menu" aria-expanded={mobileNav} style={{ ...S.btn, background:"transparent", color:T.textSec, padding:6, display:"none" }}><I.Menu /></button>
@@ -1719,52 +1618,37 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
           </div>
         </div>
 
-        <div className="mm-stats" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:18 }}>
+        <div className="mm-stats" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:T.border, marginBottom:16 }}>
           {stats.map((s,i)=>(
-            <div key={s.label} style={{ background:T.bgEl, border:`1px solid ${T.border}`, padding:"14px 16px", position:"relative", overflow:"hidden", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*60}ms both` }}>
-              <div style={{ position:"absolute", top:-15, right:-15, width:50, height:50, borderRadius:"50%", background:s.color, filter:"blur(30px)", opacity:0.15 }} />
-              <div style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", lineHeight:1, position:"relative" }}><AnimCount to={s.val} duration={700+i*100} /></div>
-              <div style={{ fontSize:10, fontWeight:600, color:T.textMuted, letterSpacing:"0.04em", marginTop:4, textTransform:"uppercase", position:"relative" }}>{s.label}</div>
+            <div key={s.label} style={{ background:T.bg, padding:"12px 14px", animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*60}ms both` }}>
+              <div style={{ fontSize:20, fontWeight:800, letterSpacing:"-0.03em", lineHeight:1, color:s.color }}><AnimCount to={s.val} duration={700+i*100} /></div>
+              <div style={{ fontSize:10, fontWeight:600, color:T.textMuted, letterSpacing:"0.04em", marginTop:4, textTransform:"uppercase" }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        {allTags.length>0&&<div role="toolbar" aria-label="Filter by tags" style={{ marginBottom:12, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", overflowX:"auto", paddingBottom:4 }}>
-          <span style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginRight:2, flexShrink:0 }}>Filter</span>
-          <Tag tag="ALL" small active={!filterTag} onClick={()=>setFilterTag(null)} />
-          {allTags.map(t=><Tag key={t} tag={t} small active={filterTag===t} onClick={()=>setFilterTag(filterTag===t?null:t)} />)}
-        </div>}
-
-        {/* Sort controls */}
-        <div role="toolbar" aria-label="Sort categories" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <span style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginRight:2, flexShrink:0, display:"flex", alignItems:"center", gap:4 }}><I.Sort /> Sort</span>
-            {[
-              { id:"default", label:"Default", icon:null },
-              { id:"az", label:"A→Z", icon:<I.AZ /> },
-              { id:"za", label:"Z→A", icon:null },
-              { id:"most", label:"Most links", icon:<I.Hash /> },
-              { id:"least", label:"Fewest", icon:null },
-              { id:"newest", label:"Newest", icon:<I.Clock /> },
-            ].map(s=>(
-              <button key={s.id} onClick={()=>setSortBy(s.id)}
-                aria-pressed={sortBy===s.id}
-                aria-label={`Sort by ${s.label}`}
-                style={{
-                  ...S.btn, padding:"3px 10px", fontSize:10, fontWeight:700, letterSpacing:"0.02em", textTransform:"uppercase",
-                  background:sortBy===s.id?T.primary+"20":"transparent",
-                  color:sortBy===s.id?T.primary:T.textMuted,
-                  border:`1px solid ${sortBy===s.id?T.primary+"40":T.border}`,
-                  transition:"all 0.15s",
-                }}
-                onMouseEnter={e=>{if(sortBy!==s.id){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.textSec}}}
-                onMouseLeave={e=>{if(sortBy!==s.id){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textMuted}}}
-              >{s.label}</button>
-            ))}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+          {allTags.length>0&&<div role="toolbar" aria-label="Filter by tags" style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", flex:1, minWidth:0 }}>
+            <Tag tag="ALL" small active={!filterTag} onClick={()=>setFilterTag(null)} />
+            {allTags.map(t=><Tag key={t} tag={t} small active={filterTag===t} onClick={()=>setFilterTag(filterTag===t?null:t)} />)}
+          </div>}
+          <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:T.textMuted, fontWeight:600 }}>
+              <I.Sort />
+              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} aria-label="Sort categories"
+                style={{ background:T.bgInput, border:`1px solid ${T.border}`, color:T.text, fontFamily:T.font, fontSize:12, fontWeight:600, padding:"5px 8px", borderRadius:0, cursor:"pointer", outline:"none" }}>
+                <option value="default">Default</option>
+                <option value="az">A → Z</option>
+                <option value="za">Z → A</option>
+                <option value="most">Most links</option>
+                <option value="least">Fewest</option>
+                <option value="newest">Newest</option>
+              </select>
+            </label>
+            <span style={{ fontSize:11, color:T.textMuted, fontFamily:T.font }}>
+              {filtered.length} categor{filtered.length===1?"y":"ies"} · {filtered.reduce((a,c)=>a+c.bookmarks.length,0)} links
+            </span>
           </div>
-          <span style={{ fontSize:11, color:T.textMuted, fontFamily:T.font }}>
-            {filtered.length} categor{filtered.length===1?"y":"ies"} · {filtered.reduce((a,c)=>a+c.bookmarks.length,0)} links
-          </span>
         </div>
 
         <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The bookmark grid encountered an error. Try refreshing.">
@@ -1787,7 +1671,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         style={{
           ...S.btn, display:"none", position:"fixed", bottom:24, right:20, zIndex:90,
           width:52, height:52, padding:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`,
-          color:"#fff", boxShadow:`0 4px 20px ${T.primary}50, 4px 4px 0 rgba(0,0,0,0.3)`,
+          color:T.onPrimary, boxShadow:"4px 4px 0 rgba(0,0,0,0.35)",
           transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)",
         }}
         onTouchStart={e=>e.currentTarget.style.transform="scale(0.9)"}
@@ -2155,7 +2039,7 @@ function AiPanel({ open, onClose, categories }) {
       {/* Header */}
       <div style={{ padding:"16px 18px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <div style={{ width:28, height:28, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div style={{ width:28, height:28, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center", color:T.onPrimary }}>
             <I.Sparkle />
           </div>
           <div>
@@ -2174,7 +2058,7 @@ function AiPanel({ open, onClose, categories }) {
               width:24, height:24, flexShrink:0,
               background:m.role==="ai" ? `linear-gradient(135deg, ${T.primary}, ${T.secondary})` : T.bgInput,
               border:m.role==="user" ? `1px solid ${T.border}` : "none",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:800, color:"#fff",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:800, color:m.role==="ai"?T.onPrimary:T.textMuted,
             }}>{m.role==="ai" ? <I.Sparkle /> : "U"}</div>
             <div style={{
               maxWidth:"85%", padding:"10px 14px", fontSize:13, lineHeight:1.6, color:T.text, fontFamily:T.font,
@@ -2186,7 +2070,7 @@ function AiPanel({ open, onClose, categories }) {
         ))}
         {loading && (
           <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
-            <div style={{ width:24, height:24, flexShrink:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center" }}><I.Sparkle /></div>
+            <div style={{ width:24, height:24, flexShrink:0, background:`linear-gradient(135deg, ${T.primary}, ${T.secondary})`, display:"flex", alignItems:"center", justifyContent:"center", color:T.onPrimary }}><I.Sparkle /></div>
             <div style={{ padding:"12px 16px", background:T.bgPanel, border:`1px solid ${T.border}`, display:"flex", gap:4 }}>
               {[0,1,2].map(i=><div key={i} style={{ width:6, height:6, background:T.primary, borderRadius:"50%", opacity:0.5, animation:`mmPulse 1s ease ${i*0.15}s infinite` }} />)}
             </div>
@@ -2215,7 +2099,7 @@ function AiPanel({ open, onClose, categories }) {
             placeholder="Ask about your bookmarks…" aria-label="AI message input"
             style={{ ...S.input, flex:1, padding:"10px 14px" }} />
           <button onClick={sendMessage} disabled={loading||!input.trim()} aria-label="Send message"
-            style={{ ...S.btn, width:40, height:40, padding:0, background:input.trim()?T.primary:T.bgInput, color:input.trim()?"#fff":T.textMuted, flexShrink:0, transition:"all 0.15s" }}>
+            style={{ ...S.btn, width:40, height:40, padding:0, background:input.trim()?T.primary:T.bgInput, color:input.trim()?T.onPrimary:T.textMuted, flexShrink:0, transition:"all 0.15s" }}>
             <I.Send />
           </button>
         </div>
@@ -2251,7 +2135,6 @@ export default function App() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         @keyframes mmFadeIn{from{opacity:0}to{opacity:1}}
         @keyframes mmSlideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes mmSlideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
@@ -2264,9 +2147,6 @@ export default function App() {
         @keyframes mmSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes mmShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes mmPulse{0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1.1)}}
-        *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12)}
-        body{background:${T.bg}}
       `}</style>
       <PageTransition pageKey={page}>
         {page === "landing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The landing page encountered an error."><LandingPage onNavigate={navigate} /></ErrorBoundary>}

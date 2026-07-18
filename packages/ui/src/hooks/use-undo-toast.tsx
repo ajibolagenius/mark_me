@@ -94,7 +94,7 @@ export function useUndoToast() {
                   type="button"
                   onClick={handleUndo}
                   aria-label="Undo delete"
-                  className="inline-flex cursor-pointer items-center justify-center border-none bg-mm-primary px-3 py-1 text-xs font-extrabold text-white hover:opacity-85"
+                  className="inline-flex cursor-pointer items-center justify-center border-none bg-mm-primary px-3 py-1 text-xs font-extrabold text-mm-on-primary hover:opacity-85"
                 >
                   Undo
                 </button>

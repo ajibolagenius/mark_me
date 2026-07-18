@@ -135,7 +135,7 @@ function BookmarkGrid() {
             ) : (
               searchResults.map((b) => {
                 const accent = ACCENTS[b.catColor % ACCENTS.length] ??
-                  ACCENTS[0] ?? { bg: "#A855F7", glow: "rgba(168,85,247,0.25)" };
+                  ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
                 return (
                   <a
                     key={b.id}
@@ -189,7 +189,7 @@ function BookmarkGrid() {
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {pinned.map((b) => {
               const accent = ACCENTS[b.catColor % ACCENTS.length] ??
-                ACCENTS[0] ?? { bg: "#A855F7", glow: "rgba(168,85,247,0.25)" };
+                ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
               return (
                 <a
                   key={b.id}
@@ -225,7 +225,7 @@ function BookmarkGrid() {
           <div className="border border-mm-border bg-mm-bg-el">
             {recent.map((b, i) => {
               const accent = ACCENTS[b.catColor % ACCENTS.length] ??
-                ACCENTS[0] ?? { bg: "#A855F7", glow: "rgba(168,85,247,0.25)" };
+                ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
               const ago = timeAgo(b.addedAt);
               return (
                 <a
