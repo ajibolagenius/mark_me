@@ -29,12 +29,6 @@
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 body {
   background: var(--color-mm-bg);
   -webkit-font-smoothing: antialiased;
