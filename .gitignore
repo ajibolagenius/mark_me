@@ -1,6 +1,10 @@
 # dependencies
 node_modules
 
+# pnpm is the package manager — do not commit npm lockfiles (breaks Vercel/Turbo installs)
+package-lock.json
+npm-shrinkwrap.json
+
 # build output
 dist
 .next

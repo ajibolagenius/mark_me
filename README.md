@@ -123,6 +123,15 @@ Import styles in apps:
 import { T, Logo, Atmosphere } from "@markme/ui";
 ```
 
+## Deploy (Vercel)
+
+1. Import the GitHub repo in Vercel.
+2. Set **Root Directory** to `apps/web`.
+3. Keep the default framework (Next.js). Install/build are set in [`apps/web/vercel.json`](apps/web/vercel.json) (`pnpm` + Turbo filter).
+4. Add env vars from [`apps/web/.env.example`](apps/web/.env.example) (`DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, etc.).
+
+This repo uses **pnpm workspaces**. Do not commit a root `package-lock.json` — Vercel will pick npm, skip the workspace, and fail with “No Next.js version detected.”
+
 ## License
 
 Private — all rights reserved.
