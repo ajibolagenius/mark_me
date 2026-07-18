@@ -1465,10 +1465,10 @@ const CatCard = React.memo(function CatCard({ cat, onTogglePin, onSaveBm, onDele
         {cat.tags?.length>0&&<div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:8 }} role="list" aria-label="Category tags">{cat.tags.map(t=><Tag key={t} tag={t} small />)}</div>}
       </div>
       <AnimatedCollapse open={exp}>
-        <div style={{ borderTop:`1px solid ${T.border}` }} role="list" aria-label={`Bookmarks in ${cat.name}`}>
+        <div style={{ borderTop:`1px solid ${T.border}` }}>
         {isEmpty ? (
           <div style={{ padding:"24px 18px", textAlign:"center" }}>
-            <div style={{ width:48, height:48, margin:"0 auto 10px", background:ac.bg+"12", border:`1px solid ${ac.bg}25`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <div style={{ width:48, height:48, margin:"0 auto 10px", background:ac.bg+"12", border:`1px solid ${ac.bg}25`, display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
               <I.BookmarkSm />
               <span style={{ position:"absolute", color:ac.bg, opacity:0.5, fontSize:18 }}>+</span>
             </div>
@@ -1478,17 +1478,30 @@ const CatCard = React.memo(function CatCard({ cat, onTogglePin, onSaveBm, onDele
               onMouseEnter={e=>{e.currentTarget.style.background=ac.bg+"30"}} onMouseLeave={e=>{e.currentTarget.style.background=ac.bg+"18"}}><I.Plus /> Add Bookmark</button>
           </div>
         ) : (<>
+        <div
+          className="mm-cat-scroll"
+          role="list"
+          aria-label={`Bookmarks in ${cat.name}`}
+          style={{
+            maxHeight: isMobile ? 280 : 320,
+            overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
         {sorted.map((bm,bi)=>{
           const bmRow = <BookmarkRow bm={bm} accent={cat.color} searchQuery={q} onEdit={setEditBm} onDelete={id=>onDeleteBm(cat.id, id, sorted.find(x=>x.id===id)?.title||"bookmark")} onTogglePin={id=>onTogglePin(id)} />;
           return (
-            <div key={bm.id} style={{ animation: exp ? `mmRowIn 0.3s ease ${bi*40}ms both` : "none" }}>
+            <div key={bm.id} role="listitem" style={{ animation: exp ? `mmRowIn 0.3s ease ${Math.min(bi,8)*40}ms both` : "none" }}>
               {isMobile
                 ? <SwipeRow onSwipeDelete={()=>onDeleteBm(cat.id, bm.id, bm.title)}>{bmRow}</SwipeRow>
                 : bmRow}
             </div>
           );
         })}
-        <button onClick={()=>setAddBm(true)} aria-label={`Add bookmark to ${cat.name}`} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12 }}
+        </div>
+        <button onClick={()=>setAddBm(true)} aria-label={`Add bookmark to ${cat.name}`} style={{ ...S.btn, width:"100%", padding:"10px", background:"transparent", color:T.textMuted, borderTop:`1px solid ${T.border}`, fontSize:12, flexShrink:0 }}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color=ac.bg}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMuted}}><I.Plus /> Add Bookmark</button>
         </>)}
         </div>
@@ -1860,6 +1873,10 @@ function Dashboard({ user, onNavigate, onLogout }) {
         *:focus-visible{outline:2px solid ${T.primary};outline-offset:2px}
         input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:${T.primary}!important}
         .mm-bm-actions:focus-within{opacity:1!important}
+        .mm-cat-scroll{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.18) transparent}
+        .mm-cat-scroll::-webkit-scrollbar{width:4px}
+        .mm-cat-scroll::-webkit-scrollbar-track{background:transparent}
+        .mm-cat-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.18)}
       `}</style>
     </div>
   );
