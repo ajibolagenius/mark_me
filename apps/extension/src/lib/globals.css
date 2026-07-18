@@ -10,9 +10,19 @@
   padding: 0;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
 body {
   background: var(--color-mm-bg);
   color: var(--color-mm-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }

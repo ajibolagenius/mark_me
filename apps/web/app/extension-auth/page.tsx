@@ -108,7 +108,8 @@ function ExtensionAuthInner() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        position: "fixed",
+        inset: 0,
         background: T.bg,
         color: T.text,
         fontFamily: T.font,
@@ -116,21 +117,48 @@ function ExtensionAuthInner() {
         alignItems: "center",
         justifyContent: "center",
         padding: 24,
+        boxSizing: "border-box",
       }}
     >
-      <div style={{ width: 400, maxWidth: "100%", textAlign: "center" }}>
-        <Logo size={36} />
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "42%",
+          width: 420,
+          height: 420,
+          transform: "translate(-50%, -50%)",
+          borderRadius: "50%",
+          background: T.primary,
+          opacity: 0.05,
+          filter: "blur(120px)",
+          pointerEvents: "none",
+        }}
+      />
+      <div style={{ position: "relative", width: 420, maxWidth: "100%", textAlign: "center" }}>
+        <Logo size={40} />
         <h1
           style={{
             marginTop: 28,
-            fontSize: 24,
+            fontSize: "clamp(1.5rem, 4vw, 1.75rem)",
             fontWeight: 800,
             letterSpacing: "-0.04em",
           }}
         >
           Connect extension
         </h1>
-        <p style={{ marginTop: 10, fontSize: 14, color: T.textSec, lineHeight: 1.5 }}>
+        <p
+          style={{
+            marginTop: 12,
+            fontSize: 15,
+            color: T.textSec,
+            lineHeight: 1.55,
+            maxWidth: 360,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
           Link this Chrome extension to your mark_me account so you can save bookmarks from any
           page.
         </p>
@@ -239,7 +267,8 @@ export default function ExtensionAuthPage() {
       fallback={
         <div
           style={{
-            minHeight: "100vh",
+            position: "fixed",
+            inset: 0,
             background: T.bg,
             color: T.textMuted,
             display: "flex",

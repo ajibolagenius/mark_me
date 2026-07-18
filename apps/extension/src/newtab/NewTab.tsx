@@ -4,7 +4,7 @@ import { trpcReact } from "@/lib/trpc";
 import { ACCENTS, FaviconWithFallback, Highlight, Logo, getDomain, timeAgo } from "@markme/ui";
 import { motion } from "framer-motion";
 import {
-  Chrome,
+  BookmarkPlus,
   Clock,
   ExternalLink,
   LayoutDashboard,
@@ -34,21 +34,71 @@ type BmRow = {
   catName: string;
 };
 
+function Ambient() {
+  return (
+    <>
+      <div className="pointer-events-none fixed left-1/2 top-[28%] h-[480px] w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-mm-primary opacity-[0.06] blur-[140px]" />
+      <div className="pointer-events-none fixed bottom-[12%] right-[8%] h-[300px] w-[300px] rounded-full bg-mm-secondary opacity-[0.04] blur-[110px]" />
+    </>
+  );
+}
+
+function TopBar({
+  showDashboard,
+  onDisconnect,
+}: {
+  showDashboard?: boolean;
+  onDisconnect?: () => void;
+}) {
+  const webAppUrl = getWebAppUrl();
+  return (
+    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 py-4 sm:px-7">
+      <div className="pointer-events-auto">
+        <Logo size={24} />
+      </div>
+      <div className="pointer-events-auto flex items-center gap-2">
+        {showDashboard && (
+          <a
+            href={`${webAppUrl}/dashboard`}
+            className="inline-flex items-center gap-1.5 border border-mm-border bg-mm-bg-el/80 px-3 py-2 text-[12px] font-bold text-mm-text-sec backdrop-blur-sm transition-colors hover:border-mm-primary/40 hover:text-mm-text"
+          >
+            <LayoutDashboard size={13} />
+            Dashboard
+          </a>
+        )}
+        {onDisconnect && (
+          <button
+            type="button"
+            onClick={onDisconnect}
+            aria-label="Disconnect"
+            className="inline-flex cursor-pointer items-center border border-mm-border bg-mm-bg-el/80 p-2 text-mm-text-muted backdrop-blur-sm transition-colors hover:border-mm-error/40 hover:text-mm-error"
+          >
+            <LogOut size={14} />
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
+
 function ConnectPrompt() {
   const webAppUrl = getWebAppUrl();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-mm-bg px-5">
+    <div className="relative flex h-full min-h-dvh items-center justify-center bg-mm-bg px-5">
+      <Ambient />
+      <TopBar />
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center"
+        transition={{ duration: 0.4 }}
+        className="relative z-10 w-full max-w-[420px] text-center"
       >
-        <Logo size={36} />
-        <h2 className="mt-6 text-[22px] font-extrabold tracking-[-0.03em] text-mm-text">
+        <Logo size={40} />
+        <h1 className="mt-7 text-[clamp(1.5rem,4vw,1.85rem)] font-extrabold tracking-[-0.04em] text-mm-text">
           Welcome to mark_me
-        </h2>
-        <p className="mx-auto mt-2 max-w-[340px] text-[14px] leading-relaxed text-mm-text-sec">
+        </h1>
+        <p className="mx-auto mt-3 max-w-[340px] text-[15px] leading-relaxed text-mm-text-sec">
           Connect your account to see pinned and recent bookmarks in every new tab.
         </p>
         <button
@@ -57,7 +107,7 @@ function ConnectPrompt() {
             const extId = chrome.runtime.id;
             window.location.href = `${webAppUrl}/extension-auth?ext=${extId}`;
           }}
-          className="mt-6 inline-flex items-center gap-2 bg-mm-primary px-6 py-3 text-[13px] font-extrabold text-mm-on-primary shadow-[3px_3px_0_rgba(0,0,0,0.4)] transition-all hover:-translate-y-px hover:shadow-[4px_4px_0_rgba(0,0,0,0.5)]"
+          className="mt-8 inline-flex items-center gap-2 bg-mm-primary px-7 py-3.5 text-[14px] font-extrabold text-mm-on-primary shadow-[4px_4px_0_rgba(0,0,0,0.45)] transition-all hover:-translate-y-0.5 hover:shadow-[5px_5px_0_rgba(0,0,0,0.5)]"
         >
           Connect to mark_me →
         </button>
@@ -172,18 +222,13 @@ function BookmarkGrid() {
 
   const pinned = allBm.filter((b) => b.pinned);
   const recent = [...allBm].sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0)).slice(0, 10);
+  const isEmpty = !isLoading && allBm.length === 0;
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [];
     return allBm.filter((b) => {
-      const hay = [
-        b.title,
-        b.url,
-        b.catName,
-        b.note ?? "",
-        ...(b.tags ?? []),
-      ]
+      const hay = [b.title, b.url, b.catName, b.note ?? "", ...(b.tags ?? [])]
         .join(" ")
         .toLowerCase();
       return hay.includes(q);
@@ -208,92 +253,234 @@ function BookmarkGrid() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-mm-bg px-5 pb-16 pt-[10vh] font-sans text-mm-text">
-      <div className="pointer-events-none fixed left-1/2 top-[12%] h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-mm-primary opacity-[0.05] blur-[120px]" />
-      <div className="pointer-events-none fixed bottom-[8%] right-[8%] h-[280px] w-[280px] rounded-full bg-mm-secondary opacity-[0.04] blur-[100px]" />
+    <div className="relative h-full min-h-dvh bg-mm-bg font-sans text-mm-text">
+      <Ambient />
+      <TopBar showDashboard onDisconnect={() => void clearAuth()} />
 
-      {/* Top bar */}
-      <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-5 py-4">
-        <Logo size={22} />
-        <div className="flex items-center gap-2">
-          <a
-            href={`${webAppUrl}/dashboard`}
-            className="inline-flex items-center gap-1.5 border border-mm-border bg-mm-bg-el px-3 py-1.5 text-[11px] font-bold text-mm-text-sec transition-colors hover:border-mm-primary/40 hover:text-mm-text"
-          >
-            <LayoutDashboard size={12} />
-            Dashboard
-          </a>
-          <button
-            type="button"
-            onClick={() => void clearAuth()}
-            aria-label="Disconnect"
-            className="inline-flex cursor-pointer items-center border-none bg-transparent p-1.5 text-mm-text-muted transition-colors hover:text-mm-error"
-          >
-            <LogOut size={14} />
-          </button>
-        </div>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="mb-2 text-center"
+      <main
+        className={[
+          "relative z-10 mx-auto flex w-full max-w-[720px] flex-col items-center px-5",
+          isEmpty || isLoading
+            ? "min-h-dvh justify-center py-28"
+            : "min-h-dvh justify-start pb-20 pt-[min(18vh,140px)]",
+        ].join(" ")}
       >
-        <div className="font-sans text-[clamp(3.5rem,11vw,6.5rem)] font-extrabold leading-none tracking-[-0.04em] text-mm-text">
-          <span>{hours}</span>
-          <span className="mx-1 text-mm-primary">:</span>
-          <span>{mins}</span>
-        </div>
-        <p className="mt-2 text-[15px] font-medium text-mm-text-sec">
-          {greeting} — {dateStr}
-        </p>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.08 }}
-        className="relative mx-auto mt-8 w-full max-w-[600px]"
-      >
-        <div className="relative">
-          <div className="absolute left-4 top-1/2 flex -translate-y-1/2 text-mm-text-muted">
-            <Search size={16} />
+        {/* Hero: clock + greeting + search — one centered composition when empty */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full text-center"
+        >
+          <div className="font-sans text-[clamp(4rem,11vw,6.75rem)] font-extrabold leading-none tracking-[-0.05em] text-mm-text">
+            <span>{hours}</span>
+            <span className="mx-[0.06em] text-mm-primary">:</span>
+            <span>{mins}</span>
           </div>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search title, URL, tags, notes…"
-            aria-label="Search bookmarks"
-            className="w-full border border-mm-border bg-mm-bg-el py-3.5 pl-11 pr-10 text-[14px] text-mm-text outline-none transition-colors focus:border-mm-primary"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 flex -translate-y-1/2 cursor-pointer border-none bg-transparent p-1 text-mm-text-muted hover:text-mm-text"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
+          <p className="mt-3 text-[15px] font-medium text-mm-text-sec sm:text-[16px]">
+            {greeting} — {dateStr}
+          </p>
+        </motion.div>
 
-        {search && (
-          <div className="absolute left-0 top-full z-50 mt-1 max-h-[360px] w-full overflow-y-auto border border-mm-border bg-mm-bg-el shadow-[6px_6px_0_rgba(0,0,0,0.4)]">
-            {searchResults.length === 0 ? (
-              <div className="px-4 py-6 text-center text-[13px] text-mm-text-muted">
-                No bookmarks found for &quot;{search}&quot;
-              </div>
-            ) : (
-              searchResults.map((b) => {
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.06 }}
+          className="relative mt-8 w-full max-w-[560px]"
+        >
+          <div className="relative">
+            <div className="pointer-events-none absolute left-4 top-1/2 flex -translate-y-1/2 text-mm-text-muted">
+              <Search size={16} />
+            </div>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search bookmarks"
+              aria-label="Search bookmarks"
+              className="w-full border border-mm-border bg-mm-bg-el/90 py-3.5 pl-11 pr-10 text-[15px] text-mm-text outline-none backdrop-blur-sm transition-colors placeholder:text-mm-text-muted focus:border-mm-primary/60"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 flex -translate-y-1/2 cursor-pointer border-none bg-transparent p-1 text-mm-text-muted hover:text-mm-text"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {search && (
+            <div className="absolute left-0 top-full z-50 mt-1.5 max-h-[min(360px,40vh)] w-full overflow-y-auto border border-mm-border bg-mm-bg-el text-left shadow-[6px_6px_0_rgba(0,0,0,0.4)]">
+              {searchResults.length === 0 ? (
+                <div className="px-4 py-6 text-center text-[13px] text-mm-text-muted">
+                  No bookmarks found for &quot;{search}&quot;
+                </div>
+              ) : (
+                searchResults.map((b) => {
+                  const accent = ACCENTS[b.catColor % ACCENTS.length] ??
+                    ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
+                  return (
+                    <div
+                      key={b.id}
+                      className="group flex items-center gap-3 border-b border-mm-border px-3 py-2.5 transition-colors last:border-b-0 hover:bg-mm-bg-panel"
+                    >
+                      <a
+                        href={b.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex min-w-0 flex-1 items-center gap-3"
+                      >
+                        <FaviconWithFallback url={b.url} title={b.title} size={18} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-semibold text-mm-text">
+                            <Highlight text={b.title} query={search} />
+                          </div>
+                          <div className="truncate text-[11px] text-mm-text-muted">
+                            <Highlight text={getDomain(b.url)} query={search} />
+                          </div>
+                        </div>
+                        <span
+                          className="hidden shrink-0 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.04em] sm:inline-block"
+                          style={{
+                            background: `${accent.bg}15`,
+                            border: `1px solid ${accent.bg}25`,
+                            color: accent.bg,
+                          }}
+                        >
+                          {b.catName}
+                        </span>
+                      </a>
+                      <RowActions
+                        bookmark={b}
+                        onPin={() => handlePin(b.id)}
+                        onDelete={() => handleDelete(b.id)}
+                        pinning={togglePin.isPending}
+                        deleting={deleteBm.isPending}
+                      />
+                    </div>
+                  );
+                })
+              )}
+              {confirmDeleteId && searchResults.some((b) => b.id === confirmDeleteId) && (
+                <div className="border-t border-mm-border bg-mm-bg-panel px-4 py-2 text-center text-[11px] text-mm-warning">
+                  Click delete again to confirm
+                </div>
+              )}
+            </div>
+          )}
+        </motion.div>
+
+        {isLoading && (
+          <div className="mt-10 flex items-center gap-2 text-[13px] text-mm-text-muted">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-mm-border border-t-mm-primary" />
+            Loading your bookmarks…
+          </div>
+        )}
+
+        {isEmpty && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.1 }}
+            className="mt-10 w-full max-w-[400px] text-center"
+          >
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center border border-mm-primary/25 bg-mm-primary-subtle text-mm-primary">
+              <BookmarkPlus size={22} strokeWidth={2.25} />
+            </div>
+            <h2 className="text-[17px] font-extrabold tracking-[-0.02em] text-mm-text">
+              No bookmarks yet
+            </h2>
+            <p className="mx-auto mt-2 text-[14px] leading-relaxed text-mm-text-sec">
+              Click the mark_me icon in your toolbar to save your first bookmark.
+            </p>
+            <a
+              href={`${webAppUrl}/dashboard`}
+              className="mt-6 inline-flex items-center gap-2 bg-mm-primary px-6 py-3 text-[13px] font-extrabold text-mm-on-primary shadow-[3px_3px_0_rgba(0,0,0,0.35)] transition-all hover:-translate-y-px hover:shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
+            >
+              Open Dashboard →
+            </a>
+          </motion.div>
+        )}
+
+        {!isLoading && !search && pinned.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.1 }}
+            className="mt-12 w-full"
+          >
+            <h2 className="mb-4 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-mm-text-muted">
+              <Pin size={11} />
+              Pinned
+            </h2>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              {pinned.map((b) => {
                 const accent = ACCENTS[b.catColor % ACCENTS.length] ??
                   ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
                 return (
                   <div
                     key={b.id}
-                    className="group flex items-center gap-3 border-b border-mm-border px-3 py-2.5 transition-colors last:border-b-0 hover:bg-mm-bg-panel"
+                    className="group relative border border-mm-border bg-mm-bg-el/90 transition-colors hover:bg-mm-bg-panel"
+                  >
+                    <a
+                      href={b.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block px-4 py-3.5"
+                    >
+                      <div className="mb-0.5 h-[2px] w-6" style={{ background: accent.bg }} />
+                      <div className="mt-2.5 flex items-center gap-2">
+                        <FaviconWithFallback url={b.url} title={b.title} size={16} />
+                        <span className="truncate text-[13px] font-semibold text-mm-text transition-colors group-hover:text-mm-primary">
+                          {b.title}
+                        </span>
+                      </div>
+                      <div className="mt-1 truncate text-[11px] text-mm-text-muted">
+                        {getDomain(b.url)}
+                      </div>
+                    </a>
+                    <div className="absolute right-1 top-1 flex opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                      <RowActions
+                        bookmark={b}
+                        onPin={() => handlePin(b.id)}
+                        onDelete={() => handleDelete(b.id)}
+                        pinning={togglePin.isPending}
+                        deleting={deleteBm.isPending}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.section>
+        )}
+
+        {!isLoading && !search && recent.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.14 }}
+            className="mt-10 w-full"
+          >
+            <h2 className="mb-4 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-mm-text-muted">
+              <Clock size={11} />
+              Recently Added
+            </h2>
+            <div className="border border-mm-border bg-mm-bg-el/90 text-left">
+              {recent.map((b, i) => {
+                const accent = ACCENTS[b.catColor % ACCENTS.length] ??
+                  ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
+                const ago = timeAgo(b.addedAt);
+                return (
+                  <div
+                    key={b.id}
+                    className={[
+                      "group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-mm-bg-panel",
+                      i < recent.length - 1 ? "border-b border-mm-border" : "",
+                    ].join(" ")}
                   >
                     <a
                       href={b.url}
@@ -301,13 +488,13 @@ function BookmarkGrid() {
                       rel="noopener noreferrer"
                       className="flex min-w-0 flex-1 items-center gap-3"
                     >
-                      <FaviconWithFallback url={b.url} title={b.title} size={18} />
+                      <FaviconWithFallback url={b.url} title={b.title} size={16} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] font-semibold text-mm-text">
-                          <Highlight text={b.title} query={search} />
+                          {b.title}
                         </div>
                         <div className="truncate text-[11px] text-mm-text-muted">
-                          <Highlight text={getDomain(b.url)} query={search} />
+                          {getDomain(b.url)}
                         </div>
                       </div>
                       <span
@@ -320,6 +507,11 @@ function BookmarkGrid() {
                       >
                         {b.catName}
                       </span>
+                      {ago && (
+                        <span className="hidden shrink-0 text-[11px] tabular-nums text-mm-text-muted sm:inline">
+                          {ago}
+                        </span>
+                      )}
                     </a>
                     <RowActions
                       bookmark={b}
@@ -330,175 +522,25 @@ function BookmarkGrid() {
                     />
                   </div>
                 );
-              })
-            )}
-            {confirmDeleteId && searchResults.some((b) => b.id === confirmDeleteId) && (
-              <div className="border-t border-mm-border bg-mm-bg-panel px-4 py-2 text-center text-[11px] text-mm-warning">
+              })}
+            </div>
+            {confirmDeleteId && recent.some((b) => b.id === confirmDeleteId) && (
+              <p className="mt-2 text-center text-[11px] text-mm-warning">
                 Click delete again to confirm
-              </div>
+              </p>
             )}
-          </div>
+          </motion.section>
         )}
-      </motion.div>
+      </main>
 
-      {isLoading && (
-        <div className="mt-16 flex items-center gap-2 text-[13px] text-mm-text-muted">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-mm-border border-t-mm-primary" />
-          Loading your bookmarks…
-        </div>
-      )}
-
-      {!isLoading && pinned.length > 0 && (
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.12 }}
-          className="mx-auto mt-12 w-full max-w-[720px]"
-        >
-          <h2 className="mb-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-mm-text-muted">
-            <Pin size={11} />
-            Pinned
-          </h2>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {pinned.map((b) => {
-              const accent = ACCENTS[b.catColor % ACCENTS.length] ??
-                ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
-              return (
-                <div
-                  key={b.id}
-                  className="group relative border border-mm-border bg-mm-bg-el transition-colors hover:bg-mm-bg-panel"
-                >
-                  <a href={b.url} target="_blank" rel="noopener noreferrer" className="block px-4 py-3.5">
-                    <div className="mb-0.5 h-[2px] w-6" style={{ background: accent.bg }} />
-                    <div className="mt-2.5 flex items-center gap-2">
-                      <FaviconWithFallback url={b.url} title={b.title} size={16} />
-                      <span className="truncate text-[13px] font-semibold text-mm-text transition-colors group-hover:text-mm-primary">
-                        {b.title}
-                      </span>
-                    </div>
-                    <div className="mt-1 truncate text-[11px] text-mm-text-muted">
-                      {getDomain(b.url)}
-                    </div>
-                  </a>
-                  <div className="absolute right-1 top-1 flex opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-                    <RowActions
-                      bookmark={b}
-                      onPin={() => handlePin(b.id)}
-                      onDelete={() => handleDelete(b.id)}
-                      pinning={togglePin.isPending}
-                      deleting={deleteBm.isPending}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </motion.section>
-      )}
-
-      {!isLoading && recent.length > 0 && (
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.18 }}
-          className="mx-auto mt-10 w-full max-w-[720px]"
-        >
-          <h2 className="mb-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-mm-text-muted">
-            <Clock size={11} />
-            Recently Added
-          </h2>
-          <div className="border border-mm-border bg-mm-bg-el">
-            {recent.map((b, i) => {
-              const accent = ACCENTS[b.catColor % ACCENTS.length] ??
-                ACCENTS[0] ?? { bg: "#D4FF4F", glow: "rgba(212,255,79,0.18)" };
-              const ago = timeAgo(b.addedAt);
-              return (
-                <div
-                  key={b.id}
-                  className={[
-                    "group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-mm-bg-panel",
-                    i < recent.length - 1 ? "border-b border-mm-border" : "",
-                  ].join(" ")}
-                >
-                  <a
-                    href={b.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex min-w-0 flex-1 items-center gap-3"
-                  >
-                    <FaviconWithFallback url={b.url} title={b.title} size={16} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold text-mm-text">{b.title}</div>
-                      <div className="truncate text-[11px] text-mm-text-muted">
-                        {getDomain(b.url)}
-                      </div>
-                    </div>
-                    <span
-                      className="hidden shrink-0 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.04em] sm:inline-block"
-                      style={{
-                        background: `${accent.bg}15`,
-                        border: `1px solid ${accent.bg}25`,
-                        color: accent.bg,
-                      }}
-                    >
-                      {b.catName}
-                    </span>
-                    {ago && (
-                      <span className="hidden shrink-0 text-[11px] tabular-nums text-mm-text-muted sm:inline">
-                        {ago}
-                      </span>
-                    )}
-                  </a>
-                  <RowActions
-                    bookmark={b}
-                    onPin={() => handlePin(b.id)}
-                    onDelete={() => handleDelete(b.id)}
-                    pinning={togglePin.isPending}
-                    deleting={deleteBm.isPending}
-                  />
-                </div>
-              );
-            })}
-          </div>
-          {confirmDeleteId && recent.some((b) => b.id === confirmDeleteId) && !search && (
-            <p className="mt-2 text-center text-[11px] text-mm-warning">
-              Click delete again to confirm
-            </p>
-          )}
-        </motion.section>
-      )}
-
-      {!isLoading && allBm.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-16 text-center"
-        >
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-mm-primary/15 bg-mm-primary-subtle text-mm-primary">
-            <Chrome size={24} />
-          </div>
-          <h2 className="mb-2 text-[18px] font-extrabold text-mm-text">No bookmarks yet</h2>
-          <p className="mx-auto mb-6 max-w-[340px] text-[14px] leading-relaxed text-mm-text-sec">
-            Click the mark_me icon in your toolbar to save your first bookmark.
-          </p>
-          <a
-            href={`${webAppUrl}/dashboard`}
-            className="inline-flex items-center gap-2 bg-mm-primary px-6 py-3 text-[13px] font-extrabold text-mm-on-primary shadow-[3px_3px_0_rgba(0,0,0,0.3)] transition-all hover:-translate-y-px hover:shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
-          >
-            Open Dashboard →
-          </a>
-        </motion.div>
-      )}
-
-      <div className="mt-auto pt-16 text-center">
+      <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-5 pt-3">
         <a
           href={webAppUrl}
-          className="inline-flex items-center gap-1.5 text-[11px] text-mm-text-muted transition-colors hover:text-mm-text"
+          className="pointer-events-auto text-[11px] text-mm-text-muted transition-colors hover:text-mm-text"
         >
-          <Chrome size={12} />
           Powered by mark<span className="text-mm-primary">_</span>me
         </a>
-      </div>
+      </footer>
     </div>
   );
 }
@@ -506,7 +548,7 @@ function BookmarkGrid() {
 export function NewTab({ auth }: NewTabProps) {
   if (auth === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-mm-bg">
+      <div className="flex h-full min-h-dvh items-center justify-center bg-mm-bg">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-mm-border border-t-mm-primary" />
       </div>
     );
