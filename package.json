@@ -9,6 +9,7 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "test": "turbo test",
+    "package": "pnpm --filter @markme/extension package",
     "format": "biome format --write .",
     "check": "biome check --write .",
     "clean": "turbo clean && rm -rf node_modules"
