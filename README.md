@@ -34,7 +34,7 @@ packages/
 | Web          | Next.js 15, React 19, Tailwind CSS v4       |
 | API          | tRPC 11, TanStack Query, Zod                |
 | Auth         | Auth.js (NextAuth v5)                       |
-| Database     | PostgreSQL + Drizzle ORM                    |
+| Database     | Neon Postgres + Drizzle ORM                 |
 | Extension    | Vite, Chrome MV3                            |
 | Tooling      | pnpm workspaces, Turborepo, Biome           |
 
@@ -42,7 +42,7 @@ packages/
 
 - Node.js 20+
 - [pnpm](https://pnpm.io) 10+
-- PostgreSQL (local or hosted, e.g. Supabase / Neon)
+- A [Neon](https://console.neon.tech) Postgres project (or local PostgreSQL)
 
 ## Setup
 
@@ -66,7 +66,11 @@ Minimum for local web + DB:
 
 Optional: OAuth keys, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `EXTENSION_TOKEN_SECRET`.
 
-### Database
+### Database (Neon)
+
+1. Create a project at [console.neon.tech](https://console.neon.tech).
+2. Copy the **pooled** connection string (`-pooler` in the host) into `apps/web/.env.local` as `DATABASE_URL`.
+3. For `db:push` / `db:seed` / `db:migrate`, use the **direct** (non-pooler) URL in `packages/db/.env`.
 
 ```bash
 pnpm --filter @markme/db db:push    # sync schema

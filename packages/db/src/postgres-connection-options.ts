@@ -25,19 +25,24 @@ function looksLikeCloudPostgres(host: string): boolean {
 }
 
 /**
- * Returns true when the URL targets Supabase's pgBouncer pooler in
- * transaction mode (port 6543 or hostname contains "pooler.supabase.com").
+ * Returns true when the URL targets a PgBouncer pooler in transaction mode
+ * (Neon `-pooler` host, Supabase pooler, or port 6543).
  * In that mode postgres-js must NOT use server-side prepared statements.
  */
-function looksLikeSupabasePooler(parsed: URL): boolean {
+function looksLikeTransactionPooler(parsed: URL): boolean {
   const h = parsed.hostname.toLowerCase();
-  return h.includes("pooler.supabase.com") || parsed.port === "6543";
+  return (
+    h.includes("-pooler.") ||
+    h.includes("pooler.supabase.com") ||
+    parsed.port === "6543" ||
+    parsed.searchParams.get("pgbouncer") === "true"
+  );
 }
 
 /**
  * Options for `postgres(url, opts)` so cloud Postgres (TLS required) and
- * Supabase's pgBouncer pooler (prepare: false) work without changing the
- * connection string. Override SSL with DATABASE_SSL=require|disable.
+ * PgBouncer poolers (prepare: false) work without changing the connection
+ * string. Override SSL with DATABASE_SSL=require|disable.
  */
 export function getPostgresConnectionOptions(
   connectionString: string,
@@ -62,7 +67,7 @@ export function getPostgresConnectionOptions(
   }
 
   // pgBouncer transaction mode does not support prepared statements
-  const prepare = parsed && looksLikeSupabasePooler(parsed) ? false : undefined;
+  const prepare = parsed && looksLikeTransactionPooler(parsed) ? false : undefined;
 
   return {
     ...(ssl !== undefined && { ssl }),
