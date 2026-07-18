@@ -1,93 +1,97 @@
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { createAnthropicClient } from "./client";
-import { getAnthropicModel } from "./env";
+import type { z } from "zod";
+import { createOpenRouterClient } from "./client";
+import { getOpenRouterModel } from "./env";
 import {
-  autoTagUserPrompt,
-  duplicatesUserPrompt,
-  reorgUserPrompt,
-  summarizeUserPrompt,
+    autoTagUserPrompt,
+    duplicatesUserPrompt,
+    reorgUserPrompt,
+    summarizeUserPrompt,
 } from "./prompts";
 import {
-  autoTagResultSchema,
-  duplicateResultSchema,
-  reorgResultSchema,
-  summaryResultSchema,
-  type AutoTagResult,
-  type DuplicateResult,
-  type ReorgResult,
-  type SummaryResult,
+    autoTagResultSchema,
+    duplicateResultSchema,
+    reorgResultSchema,
+    summaryResultSchema,
+    type AutoTagResult,
+    type DuplicateResult,
+    type ReorgResult,
+    type SummaryResult,
 } from "./schemas";
 
+async function completeJson<T>(
+    schema: z.ZodType<T>,
+    userPrompt: string,
+    maxTokens: number,
+    shapeHint: string,
+): Promise<T> {
+    const client = createOpenRouterClient();
+    const message = await client.chat.completions.create({
+        model: getOpenRouterModel(),
+        max_tokens: maxTokens,
+        response_format: { type: "json_object" },
+        messages: [
+            {
+                role: "system",
+                content: `You are a JSON API for mark_me. Reply with a single JSON object only (no markdown). Shape: ${shapeHint}`,
+            },
+            { role: "user", content: userPrompt },
+        ],
+    });
+
+    const raw = message.choices[0]?.message?.content?.trim() ?? "{}";
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        // Some models wrap JSON in fences despite instructions
+        const fenced = raw.match(/\{[\s\S]*\}/);
+        if (!fenced) throw new Error("AI returned non-JSON");
+        parsed = JSON.parse(fenced[0]);
+    }
+    return schema.parse(parsed);
+}
+
 export async function runAutoTagStructured(title: string, url: string): Promise<AutoTagResult> {
-  const client = createAnthropicClient();
-  const message = await client.messages.parse({
-    model: getAnthropicModel(),
-    max_tokens: 512,
-    messages: [{ role: "user", content: autoTagUserPrompt(title, url) }],
-    output_config: { format: zodOutputFormat(autoTagResultSchema) },
-  });
-  const out = message.parsed_output;
-  if (!out) {
-    throw new Error("Auto-tag: empty parsed output");
-  }
-  return out;
+    return completeJson(
+        autoTagResultSchema,
+        autoTagUserPrompt(title, url),
+        512,
+        '{"tags":["string"]}',
+    );
 }
 
 export async function runSummarizeStructured(
-  categoryName: string,
-  bookmarkLines: string,
+    categoryName: string,
+    bookmarkLines: string,
 ): Promise<SummaryResult> {
-  const client = createAnthropicClient();
-  const message = await client.messages.parse({
-    model: getAnthropicModel(),
-    max_tokens: 1024,
-    messages: [{ role: "user", content: summarizeUserPrompt(categoryName, bookmarkLines) }],
-    output_config: { format: zodOutputFormat(summaryResultSchema) },
-  });
-  const out = message.parsed_output;
-  if (!out) {
-    throw new Error("Summarize: empty parsed output");
-  }
-  return out;
+    return completeJson(
+        summaryResultSchema,
+        summarizeUserPrompt(categoryName, bookmarkLines),
+        1024,
+        '{"summary":"string","keyTopics":["string"]}',
+    );
 }
 
 export async function runDuplicatesStructured(
-  bookmarks: { id: string; title: string; url: string; tags: string[] }[],
+    bookmarks: { id: string; title: string; url: string; tags: string[] }[],
 ): Promise<DuplicateResult> {
-  const client = createAnthropicClient();
-  const capped = bookmarks.slice(0, 60);
-  const message = await client.messages.parse({
-    model: getAnthropicModel(),
-    max_tokens: 2048,
-    messages: [
-      {
-        role: "user",
-        content: duplicatesUserPrompt(JSON.stringify(capped)),
-      },
-    ],
-    output_config: { format: zodOutputFormat(duplicateResultSchema) },
-  });
-  const out = message.parsed_output;
-  if (!out) {
-    throw new Error("Duplicates: empty parsed output");
-  }
-  return out;
+    const capped = bookmarks.slice(0, 60);
+    return completeJson(
+        duplicateResultSchema,
+        duplicatesUserPrompt(JSON.stringify(capped)),
+        2048,
+        '{"duplicates":[{"a":"id","b":"id","similarity":0.0}]}',
+    );
 }
 
 export async function runReorganizeStructured(
-  bookmarkContext: string,
-  hint?: string,
+    bookmarkContext: string,
+    hint?: string,
 ): Promise<ReorgResult> {
-  const client = createAnthropicClient();
-  const message = await client.messages.parse({
-    model: getAnthropicModel(),
-    max_tokens: 2048,
-    messages: [{ role: "user", content: reorgUserPrompt(bookmarkContext, hint) }],
-    output_config: { format: zodOutputFormat(reorgResultSchema) },
-  });
-  const out = message.parsed_output;
-  if (!out) {
-    throw new Error("Reorganize: empty parsed output");
-  }
-  return out;
+    return completeJson(
+        reorgResultSchema,
+        reorgUserPrompt(bookmarkContext, hint),
+        2048,
+        '{"suggestions":[{"action":"string","reason":"string"}]}',
+    );
 }

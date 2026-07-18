@@ -2303,7 +2303,7 @@ function AiPanel({ open, onClose, categories }) {
       if (!aiText) {
         setMessages(prev => {
           const next = [...prev];
-          next[next.length - 1] = { role: "ai", text: "No response from AI. Set ANTHROPIC_API_KEY on the server for live answers." };
+          next[next.length - 1] = { role: "ai", text: "No response from AI. Set OPENROUTER_API_KEY on the server for live answers." };
           return next;
         });
       }
@@ -2340,7 +2340,7 @@ function AiPanel({ open, onClose, categories }) {
           </div>
           <div>
             <div style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>AI Assistant</div>
-            <div style={{ fontSize:10, color:T.textMuted }}>Powered by Claude</div>
+            <div style={{ fontSize:10, color:T.textMuted }}>Powered by OpenRouter</div>
           </div>
         </div>
         <button onClick={onClose} aria-label="Close AI panel" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>

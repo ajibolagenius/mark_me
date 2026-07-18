@@ -10,7 +10,7 @@ Includes a **Next.js** web app, a **Chrome extension** (popup + new tab), and sh
 - Auth via **Neon Auth** (email/password + Google OAuth) stored in `neon_auth.*`
 - App profile rows synced to `public.users` for bookmarks/categories
 - Chrome extension: one-click save + new-tab dashboard
-- AI assistant for tagging, summaries, and collection Q&A (Anthropic)
+- AI assistant for tagging, summaries, and collection Q&A (OpenRouter)
 - Export / import JSON
 - Shared neo-brutalist design system (`@markme/ui`)
 
@@ -24,7 +24,7 @@ packages/
   api/          tRPC routers & shared API types
   db/           Drizzle schema, migrations, seed
   ui/           Design tokens & shared React components
-  ai/           Anthropic helpers
+  ai/           OpenRouter / LLM helpers
   config/       Shared TypeScript / tooling config
 ```
 
@@ -81,6 +81,16 @@ pnpm --filter @markme/db db:push    # sync public schema
 # After you sign up in the app once:
 SEED_USER_ID=<your-neon-auth-user-uuid> pnpm --filter @markme/db db:seed
 pnpm --filter @markme/db db:studio
+```
+
+### AI (OpenRouter)
+
+Set in `apps/web/.env.local`:
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...
+# Optional — default is Llama 3.3 70B free:
+# OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
 ```
 
 ### Auth
