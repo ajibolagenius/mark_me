@@ -7,5 +7,5 @@
     "moduleResolution": "bundler"
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "drizzle"]
+  "exclude": ["node_modules", "dist", "drizzle", "src/seed.ts"]
 }

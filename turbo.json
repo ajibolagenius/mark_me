@@ -1,5 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
+    "NEON_BRANCH",
+    "NEON_AUTH_BASE_URL",
+    "NEON_AUTH_JWKS_URL",
+    "NEON_AUTH_COOKIE_SECRET",
+    "NEON_DATA_API_URL",
+    "AUTH_URL",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODEL",
+    "EXTENSION_TOKEN_SECRET",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
