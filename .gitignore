@@ -7,6 +7,8 @@ npm-shrinkwrap.json
 
 # build output
 dist
+dist-firefox
+apps/extension/release
 .next
 !.next/cache
 

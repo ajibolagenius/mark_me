@@ -99,28 +99,48 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // ---------------------------------------------------------------------------
-// Auth: receive token from web app via externally_connectable
+// Auth: receive token from the web app.
+// Chrome: directly via externally_connectable (onMessageExternal).
+// Firefox has no externally_connectable, so the auth-bridge content script on
+// /extension-auth relays the token as an internal message (onMessage).
 // ---------------------------------------------------------------------------
 
-chrome.runtime.onMessageExternal.addListener(
-    (message: unknown, _sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
-        if (
-            typeof message === "object" &&
-            message !== null &&
-            (message as Record<string, unknown>).type === "MARKME_AUTH"
-        ) {
-            const { token, userId, expiresAt } = message as {
-                type: string;
-                token: string;
-                userId: string;
-                expiresAt: number;
-            };
-            const auth: AuthState = { token, userId, expiresAt };
-            setAuth(auth)
-                .then(() => sendResponse({ ok: true }))
-                .catch(() => sendResponse({ ok: false }));
-            return true;
-        }
+function handleAuthMessage(message: unknown, sendResponse: (r: unknown) => void): boolean {
+    if (
+        typeof message === "object" &&
+        message !== null &&
+        (message as Record<string, unknown>).type === "MARKME_AUTH"
+    ) {
+        const { token, userId, expiresAt } = message as {
+            type: string;
+            token: string;
+            userId: string;
+            expiresAt: number;
+        };
+        const auth: AuthState = { token, userId, expiresAt };
+        setAuth(auth)
+            .then(() => sendResponse({ ok: true }))
+            .catch(() => sendResponse({ ok: false }));
+        return true;
+    }
+    return false;
+}
+
+if (chrome.runtime.onMessageExternal) {
+    chrome.runtime.onMessageExternal.addListener(
+        (
+            message: unknown,
+            _sender: chrome.runtime.MessageSender,
+            sendResponse: (r: unknown) => void,
+        ) => handleAuthMessage(message, sendResponse) || undefined,
+    );
+}
+
+chrome.runtime.onMessage.addListener(
+    (message: unknown, sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
+        // Only trust our own pages / content scripts
+        if (sender.id !== chrome.runtime.id) return;
+        return handleAuthMessage(message, sendResponse) || undefined;
     },
 );
 

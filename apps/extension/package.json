@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
+    "build:firefox": "TARGET=firefox vite build",
+    "build:all": "pnpm build && pnpm build:firefox",
+    "package": "node scripts/package.mjs",
     "type-check": "tsc --noEmit",
     "lint": "biome check src/"
   },
