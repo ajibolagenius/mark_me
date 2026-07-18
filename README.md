@@ -118,6 +118,8 @@ pnpm --filter @markme/extension dev
 
 Load `apps/extension/dist` as an unpacked extension in `chrome://extensions`. Set `VITE_API_URL` to your web origin.
 
+**Connect flow:** popup / new tab → `{web}/extension-auth?ext={chrome.runtime.id}` → web mints a JWT (`EXTENSION_TOKEN_SECRET`) and `chrome.runtime.sendMessage` stores it in the extension. Add the same secret on Vercel.
+
 ## PWA / offline
 
 The web app is installable (manifest + service worker via Serwist). Production builds register the worker; `pnpm dev` keeps it disabled so Turbopack stays simple.

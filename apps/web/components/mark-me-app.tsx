@@ -1164,6 +1164,11 @@ function AuthPage({ mode, onNavigate }) {
       }
       // Provision public.users from Neon Auth session for bookmarks FKs
       await fetch("/api/auth/sync-user", { method: "POST", credentials: "include" });
+      const next = new URLSearchParams(window.location.search).get("next");
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        window.location.href = next;
+        return;
+      }
       onNavigate("dashboard");
     } catch (err) {
       setError(err?.message || "Authentication failed. Check Neon Auth configuration.");
@@ -1176,9 +1181,12 @@ function AuthPage({ mode, onNavigate }) {
     setError("");
     setGLoading(true);
     try {
+      const next = new URLSearchParams(window.location.search).get("next");
+      const callbackURL =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/",
+        callbackURL,
       });
     } catch {
       setError("Google sign-in failed. Check Neon Auth OAuth settings.");
@@ -2481,10 +2489,32 @@ function AiPanel({ open, onClose, categories }) {
 /* ══════════════════════════════════════════════════════════════════════════
    APP ROOT — ROUTER
    ══════════════════════════════════════════════════════════════════════════ */
+const PAGE_PATHS = {
+  landing: "/",
+  login: "/login",
+  signup: "/signup",
+  dashboard: "/dashboard",
+  pricing: "/pricing",
+  profile: "/profile",
+  newtab: "/newtab",
+};
+
+function pathToPage(pathname) {
+  const clean = (pathname || "/").replace(/\/+$/, "") || "/";
+  const entry = Object.entries(PAGE_PATHS).find(([, path]) => path === clean);
+  return entry?.[0] || "landing";
+}
+
+function pageToPath(page) {
+  return PAGE_PATHS[page] || "/";
+}
+
 export default function App() {
   const { data: session, isPending } = authClient.useSession();
   const online = useOnlineStatus();
-  const [page, setPage] = useState("landing");
+  const [page, setPage] = useState(() =>
+    typeof window !== "undefined" ? pathToPage(window.location.pathname) : "landing",
+  );
   const [user, setUser] = useState(null);
   const [offlineReady, setOfflineReady] = useState(false);
   const neonUser = session?.user;
@@ -2500,6 +2530,12 @@ export default function App() {
   });
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [page]);
+
+  useEffect(() => {
+    const onPop = () => setPage(pathToPage(window.location.pathname));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   // Restore last-known user when offline so the dashboard can mount with cached data.
   useEffect(() => {
@@ -2531,19 +2567,35 @@ export default function App() {
       };
       setUser(next);
       void setLastUser(next);
-      setPage(p => (p === "landing" || p === "login" || p === "signup" ? "dashboard" : p));
+      setPage(p => {
+        if (p !== "landing" && p !== "login" && p !== "signup") return p;
+        const nextPath = new URLSearchParams(window.location.search).get("next");
+        if (nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")) {
+          window.location.href = nextPath;
+          return p;
+        }
+        return "dashboard";
+      });
     } else if (online && offlineReady) {
       setUser(null);
     }
   }, [neonUser, profile, isPending, online, offlineReady]);
 
+  const navigate = p => {
+    setPage(p);
+    const path = pageToPath(p);
+    const keepSearch = p === "login" || p === "signup" ? window.location.search : "";
+    if (window.location.pathname !== path || (!keepSearch && window.location.search)) {
+      window.history.pushState({}, "", path + keepSearch);
+    }
+  };
+
   const logout = async () => {
     await clearLastUser();
     if (online) await authClient.signOut();
     setUser(null);
-    setPage("landing");
+    navigate("landing");
   };
-  const navigate = p => setPage(p);
 
   const appStats = {
     cats: categories.length,

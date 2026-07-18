@@ -7,10 +7,6 @@ import { useExtensionAuth } from "../lib/hooks";
 import { createExtensionTrpcClient, trpcReact } from "../lib/trpc";
 import { NewTab } from "./NewTab";
 
-/**
- * Mounted only after auth has resolved from chrome.storage.
- * `useState` here fires once with the real token, not null.
- */
 function AuthenticatedProviders({ auth }: { auth: AuthState | false }) {
   const [trpcClient] = useState(() => createExtensionTrpcClient(auth ? auth.token : null));
   const [queryClient] = useState(
@@ -32,7 +28,6 @@ function AuthenticatedProviders({ auth }: { auth: AuthState | false }) {
 function App() {
   const auth = useExtensionAuth();
 
-  // auth === null means storage is still being read — hold off mounting providers
   if (auth === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-mm-bg">
@@ -41,7 +36,8 @@ function App() {
     );
   }
 
-  return <AuthenticatedProviders auth={auth} />;
+  const key = auth ? auth.token : "anon";
+  return <AuthenticatedProviders key={key} auth={auth} />;
 }
 
 const el = document.getElementById("root");

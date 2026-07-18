@@ -1,14 +1,16 @@
 "use client";
 
 import type { AuthState } from "@/lib/storage";
-import { clearAuth } from "@/lib/storage";
+import { clearAuth, getPrefs, setPrefs } from "@/lib/storage";
 import { trpcReact } from "@/lib/trpc";
+import { safeHttpUrl } from "@/lib/urls";
 import { FaviconWithFallback, Logo, getDomain } from "@markme/ui";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BookmarkCheck,
   ChevronDown,
   ExternalLink,
+  FolderPlus,
   Loader2,
   LogOut,
   Plus,
@@ -29,7 +31,6 @@ interface PopupProps {
   auth: AuthState | null;
 }
 
-// --- Connect screen ---
 function ConnectScreen() {
   const webAppUrl = getWebAppUrl();
 
@@ -40,18 +41,18 @@ function ConnectScreen() {
   }
 
   return (
-    <div className="flex w-[280px] flex-col items-center gap-5 bg-mm-bg px-5 py-8">
+    <div className="flex w-[300px] flex-col items-center gap-5 bg-mm-bg px-5 py-8">
       <Logo size={32} />
       <div className="text-center">
         <p className="text-[14px] font-semibold text-mm-text">Connect your account</p>
-        <p className="mt-1 text-[12px] text-mm-text-muted">
+        <p className="mt-1 text-[12px] leading-relaxed text-mm-text-muted">
           Sign in to start saving bookmarks from any page.
         </p>
       </div>
       <button
         type="button"
         onClick={handleConnect}
-        className="w-full bg-mm-primary px-4 py-2.5 text-[13px] font-bold text-white shadow-[2px_2px_0_rgba(0,0,0,0.4)] transition-all hover:-translate-y-px hover:shadow-[3px_3px_0_rgba(0,0,0,0.5)] active:translate-y-0"
+        className="w-full bg-mm-primary px-4 py-2.5 text-[13px] font-bold text-mm-on-primary shadow-[2px_2px_0_rgba(0,0,0,0.4)] transition-all hover:-translate-y-px hover:shadow-[3px_3px_0_rgba(0,0,0,0.5)] active:translate-y-0"
       >
         Connect to mark_me →
       </button>
@@ -60,7 +61,7 @@ function ConnectScreen() {
         <button
           type="button"
           onClick={() => chrome.tabs.create({ url: `${webAppUrl}/signup` })}
-          className="cursor-pointer border-none bg-transparent p-0 text-mm-primary underline"
+          className="cursor-pointer border-none bg-transparent p-0 font-semibold text-mm-primary underline"
         >
           Sign up free
         </button>
@@ -69,7 +70,6 @@ function ConnectScreen() {
   );
 }
 
-// --- Tag input row ---
 function TagInput({
   tags,
   onAdd,
@@ -99,7 +99,7 @@ function TagInput({
       {tags.map((t) => (
         <span
           key={t}
-          className="inline-flex items-center gap-0.5 bg-mm-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-mm-primary"
+          className="inline-flex items-center gap-0.5 bg-mm-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-mm-primary"
         >
           {t}
           <button
@@ -136,8 +136,8 @@ function TagInput({
   );
 }
 
-// --- Save form ---
 function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
+  const webAppUrl = getWebAppUrl();
   const { data: categories = [], isLoading: loadingCats } = trpcReact.category.list.useQuery();
   const createBookmark = trpcReact.bookmark.create.useMutation();
 
@@ -145,20 +145,29 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
   const [tags, setTags] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "offline" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
   const [showCatDrop, setShowCatDrop] = useState(false);
+  const [prefsReady, setPrefsReady] = useState(false);
 
-  // Pre-select first category once loaded
   useEffect(() => {
-    if (!categoryId && categories.length > 0) {
-      setCategoryId(categories[0]?.id ?? "");
-    }
-  }, [categories, categoryId]);
+    void getPrefs().then((prefs) => {
+      if (prefs.lastCategoryId) setCategoryId(prefs.lastCategoryId);
+      setPrefsReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!prefsReady || categories.length === 0) return;
+    if (categoryId && categories.some((c) => c.id === categoryId)) return;
+    setCategoryId(categories[0]?.id ?? "");
+  }, [categories, categoryId, prefsReady]);
 
   const selectedCat = categories.find((c) => c.id === categoryId);
 
   async function handleSave() {
     if (!categoryId) return;
     setStatus("saving");
+    setErrorMsg("");
 
     try {
       await createBookmark.mutateAsync({
@@ -168,8 +177,9 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         tags,
         note: notes,
         pinned: false,
-        faviconUrl: tabInfo.favIconUrl ?? null,
+        faviconUrl: safeHttpUrl(tabInfo.favIconUrl),
       });
+      await setPrefs({ lastCategoryId: categoryId });
       setStatus("saved");
       setTimeout(() => window.close(), 1200);
     } catch (err) {
@@ -188,15 +198,15 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         setStatus("offline");
         setTimeout(() => window.close(), 1500);
       } else {
+        setErrorMsg(err instanceof Error ? err.message : "Save failed");
         setStatus("error");
-        setTimeout(() => setStatus("idle"), 2000);
+        setTimeout(() => setStatus("idle"), 2500);
       }
     }
   }
 
   async function handleLogout() {
     await clearAuth();
-    // Page re-renders via storage listener in main.tsx
   }
 
   if (status === "saved") {
@@ -204,7 +214,7 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex w-[280px] flex-col items-center gap-3 bg-mm-bg px-5 py-8"
+        className="flex w-[300px] flex-col items-center gap-3 bg-mm-bg px-5 py-8"
       >
         <div className="flex h-10 w-10 items-center justify-center bg-mm-success/10 text-mm-success">
           <BookmarkCheck size={22} />
@@ -220,7 +230,7 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex w-[280px] flex-col items-center gap-3 bg-mm-bg px-5 py-8"
+        className="flex w-[300px] flex-col items-center gap-3 bg-mm-bg px-5 py-8"
       >
         <div className="flex h-10 w-10 items-center justify-center bg-mm-warning/10 text-mm-warning">
           <WifiOff size={22} />
@@ -233,9 +243,45 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
     );
   }
 
+  if (!loadingCats && categories.length === 0) {
+    return (
+      <div className="flex w-[300px] flex-col bg-mm-bg">
+        <div className="flex items-center justify-between border-b border-mm-border px-3 py-2.5">
+          <Logo size={22} />
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-1 text-[10px] text-mm-text-muted transition-colors hover:text-mm-error"
+            aria-label="Disconnect account"
+          >
+            <LogOut size={11} />
+          </button>
+        </div>
+        <div className="flex flex-col items-center gap-3 px-5 py-8 text-center">
+          <div className="flex h-10 w-10 items-center justify-center border border-mm-primary/20 bg-mm-primary-subtle text-mm-primary">
+            <FolderPlus size={20} />
+          </div>
+          <p className="text-[14px] font-bold text-mm-text">No categories yet</p>
+          <p className="text-[12px] leading-relaxed text-mm-text-muted">
+            Create a category in the web app, then come back to save.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              chrome.tabs.create({ url: `${webAppUrl}/dashboard` });
+              window.close();
+            }}
+            className="mt-1 w-full bg-mm-primary px-4 py-2.5 text-[13px] font-bold text-mm-on-primary shadow-[2px_2px_0_rgba(0,0,0,0.4)]"
+          >
+            Open dashboard →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex w-[280px] flex-col bg-mm-bg">
-      {/* Header */}
+    <div className="flex w-[300px] flex-col bg-mm-bg">
       <div className="flex items-center justify-between border-b border-mm-border px-3 py-2.5">
         <Logo size={22} />
         <button
@@ -248,7 +294,6 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         </button>
       </div>
 
-      {/* Current tab preview */}
       <div className="flex items-center gap-2.5 border-b border-mm-border px-3 py-2.5">
         <FaviconWithFallback url={tabInfo.url} title={tabInfo.title} size={18} />
         <div className="min-w-0 flex-1">
@@ -266,9 +311,7 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         </a>
       </div>
 
-      {/* Form fields */}
       <div className="flex flex-col gap-2.5 px-3 py-3">
-        {/* Category */}
         <div className="relative">
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
             Category
@@ -304,7 +347,7 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.1 }}
-                className="absolute left-0 top-full z-50 mt-0.5 w-full border border-mm-border bg-mm-bg-panel shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
+                className="absolute left-0 top-full z-50 mt-0.5 max-h-[180px] w-full overflow-y-auto border border-mm-border bg-mm-bg-panel shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
               >
                 {categories.map((c) => (
                   <button
@@ -331,7 +374,6 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
           </AnimatePresence>
         </div>
 
-        {/* Tags */}
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
             Tags
@@ -343,7 +385,6 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
           />
         </div>
 
-        {/* Notes */}
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
             Notes
@@ -358,18 +399,17 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         </div>
       </div>
 
-      {/* Save button */}
       <div className="border-t border-mm-border px-3 pb-3 pt-2.5">
         {status === "error" && (
           <p className="mb-2 text-center text-[11px] text-mm-error">
-            Save failed. Please try again.
+            {errorMsg || "Save failed. Please try again."}
           </p>
         )}
         <button
           type="button"
           onClick={handleSave}
           disabled={!categoryId || status === "saving"}
-          className="flex w-full items-center justify-center gap-2 bg-mm-primary px-4 py-2.5 text-[13px] font-bold text-white shadow-[2px_2px_0_rgba(0,0,0,0.4)] transition-all hover:-translate-y-px hover:shadow-[3px_3px_0_rgba(0,0,0,0.5)] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-[2px_2px_0_rgba(0,0,0,0.4)]"
+          className="flex w-full items-center justify-center gap-2 bg-mm-primary px-4 py-2.5 text-[13px] font-bold text-mm-on-primary shadow-[2px_2px_0_rgba(0,0,0,0.4)] transition-all hover:-translate-y-px hover:shadow-[3px_3px_0_rgba(0,0,0,0.5)] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-[2px_2px_0_rgba(0,0,0,0.4)]"
         >
           {status === "saving" ? (
             <>
@@ -388,7 +428,6 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
   );
 }
 
-// --- Main Popup ---
 export function Popup({ auth }: PopupProps) {
   const [tabInfo, setTabInfo] = useState<TabInfo | null>(null);
   const [tabError, setTabError] = useState(false);
@@ -398,7 +437,7 @@ export function Popup({ auth }: PopupProps) {
       .query({ active: true, currentWindow: true })
       .then((tabs) => {
         const tab = tabs[0];
-        if (tab?.url && tab.title) {
+        if (tab?.url && tab.title && safeHttpUrl(tab.url)) {
           setTabInfo({ url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
         } else {
           setTabError(true);
@@ -411,9 +450,9 @@ export function Popup({ auth }: PopupProps) {
 
   if (tabError) {
     return (
-      <div className="flex w-[280px] flex-col items-center gap-3 bg-mm-bg px-5 py-8 text-center">
+      <div className="flex w-[300px] flex-col items-center gap-3 bg-mm-bg px-5 py-8 text-center">
         <p className="text-[13px] font-semibold text-mm-text">Can&apos;t read this tab</p>
-        <p className="text-[12px] text-mm-text-muted">
+        <p className="text-[12px] leading-relaxed text-mm-text-muted">
           Open a regular web page to save a bookmark.
         </p>
       </div>
@@ -422,7 +461,7 @@ export function Popup({ auth }: PopupProps) {
 
   if (!tabInfo) {
     return (
-      <div className="flex h-[180px] w-[280px] items-center justify-center bg-mm-bg">
+      <div className="flex h-[180px] w-[300px] items-center justify-center bg-mm-bg">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-mm-border border-t-mm-primary" />
       </div>
     );

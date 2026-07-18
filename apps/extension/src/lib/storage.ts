@@ -4,61 +4,77 @@
  */
 
 export interface AuthState {
-  token: string;
-  userId: string;
-  expiresAt: number; // unix ms
+    token: string;
+    userId: string;
+    expiresAt: number; // unix ms
 }
 
 export interface OfflineItem {
-  id: string;
-  url: string;
-  title: string;
-  categoryId: string;
-  tags: string[];
-  notes: string;
-  savedAt: number;
+    id: string;
+    url: string;
+    title: string;
+    categoryId: string;
+    tags: string[];
+    notes: string;
+    savedAt: number;
 }
 
 // --- sync storage helpers (auth, preferences) ---
 
 export async function getAuth(): Promise<AuthState | null> {
-  const result = await chrome.storage.sync.get("markme_auth");
-  const raw = result.markme_auth as AuthState | undefined;
-  if (!raw || !raw.token) return null;
-  if (raw.expiresAt < Date.now()) {
-    await clearAuth();
-    return null;
-  }
-  return raw;
+    const result = await chrome.storage.sync.get("markme_auth");
+    const raw = result.markme_auth as AuthState | undefined;
+    if (!raw || !raw.token) return null;
+    if (raw.expiresAt < Date.now()) {
+        await clearAuth();
+        return null;
+    }
+    return raw;
 }
 
 export async function setAuth(auth: AuthState): Promise<void> {
-  await chrome.storage.sync.set({ markme_auth: auth });
+    await chrome.storage.sync.set({ markme_auth: auth });
 }
 
 export async function clearAuth(): Promise<void> {
-  await chrome.storage.sync.remove("markme_auth");
+    await chrome.storage.sync.remove("markme_auth");
 }
 
 // --- local storage helpers (offline queue) ---
 
 export async function getOfflineQueue(): Promise<OfflineItem[]> {
-  const result = await chrome.storage.local.get("markme_offline_queue");
-  return (result.markme_offline_queue as OfflineItem[] | undefined) ?? [];
+    const result = await chrome.storage.local.get("markme_offline_queue");
+    return (result.markme_offline_queue as OfflineItem[] | undefined) ?? [];
 }
 
 export async function enqueueOffline(item: OfflineItem): Promise<void> {
-  const queue = await getOfflineQueue();
-  queue.push(item);
-  await chrome.storage.local.set({ markme_offline_queue: queue });
+    const queue = await getOfflineQueue();
+    queue.push(item);
+    await chrome.storage.local.set({ markme_offline_queue: queue });
 }
 
 export async function dequeueOffline(id: string): Promise<void> {
-  const queue = await getOfflineQueue();
-  const updated = queue.filter((item) => item.id !== id);
-  await chrome.storage.local.set({ markme_offline_queue: updated });
+    const queue = await getOfflineQueue();
+    const updated = queue.filter((item) => item.id !== id);
+    await chrome.storage.local.set({ markme_offline_queue: updated });
 }
 
 export async function clearOfflineQueue(): Promise<void> {
-  await chrome.storage.local.remove("markme_offline_queue");
+    await chrome.storage.local.remove("markme_offline_queue");
+}
+
+// --- preferences (sync) ---
+
+export interface ExtensionPrefs {
+    lastCategoryId?: string;
+}
+
+export async function getPrefs(): Promise<ExtensionPrefs> {
+    const result = await chrome.storage.sync.get("markme_prefs");
+    return (result.markme_prefs as ExtensionPrefs | undefined) ?? {};
+}
+
+export async function setPrefs(patch: ExtensionPrefs): Promise<void> {
+    const current = await getPrefs();
+    await chrome.storage.sync.set({ markme_prefs: { ...current, ...patch } });
 }

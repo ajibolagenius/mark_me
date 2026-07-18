@@ -5,8 +5,7 @@
  * 1. Receive auth token from the web app (externally_connectable)
  * 2. Create "Save to mark_me" context menu
  * 3. Handle context menu clicks (save page or selected link)
- * 4. Listen to chrome.bookmarks.onCreated and optionally mirror to mark_me
- * 5. Drain the offline queue when the extension wakes up
+ * 4. Drain the offline queue when the extension wakes up
  */
 
 import {
@@ -15,15 +14,37 @@ import {
     enqueueOffline,
     getAuth,
     getOfflineQueue,
+    getPrefs,
     setAuth,
+    setPrefs,
 } from "../lib/storage";
 import { createVanillaClient } from "../lib/trpc";
+import { safeHttpUrl } from "../lib/urls";
 
 const CONTEXT_MENU_ID = "markme-save";
 const CONTEXT_MENU_LINK_ID = "markme-save-link";
 
+function getWebAppUrl(): string {
+    return (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
+}
+
+function openConnectTab() {
+    const extId = chrome.runtime.id;
+    chrome.tabs.create({ url: `${getWebAppUrl()}/extension-auth?ext=${extId}` });
+}
+
+function notify(title: string, message: string) {
+    if (!chrome.notifications) return;
+    chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon48.png",
+        title,
+        message,
+    });
+}
+
 // ---------------------------------------------------------------------------
-// Install / startup — Chrome manages the service worker lifecycle
+// Install / startup
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -32,7 +53,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
     setupContextMenus();
-    drainOfflineQueue();
+    void drainOfflineQueue();
 });
 
 // ---------------------------------------------------------------------------
@@ -58,16 +79,21 @@ function setupContextMenus() {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const auth = await getAuth();
     if (!auth) {
-        // Cannot open popup programmatically in all Chrome versions; ignore
+        notify("mark_me", "Connect your account to save bookmarks.");
+        openConnectTab();
         return;
     }
 
     const isLink = info.menuItemId === CONTEXT_MENU_LINK_ID;
     const url = (isLink ? info.linkUrl : info.pageUrl) ?? "";
-    // linkText is not in all Chrome versions; fall back to selectionText or url
     const title = isLink
         ? ((info as unknown as { linkText?: string }).linkText ?? info.selectionText ?? url)
         : (tab?.title ?? url);
+
+    if (!safeHttpUrl(url)) {
+        notify("mark_me", "Can’t save this URL.");
+        return;
+    }
 
     await saveBookmark({ auth, url, title });
 });
@@ -93,7 +119,7 @@ chrome.runtime.onMessageExternal.addListener(
             setAuth(auth)
                 .then(() => sendResponse({ ok: true }))
                 .catch(() => sendResponse({ ok: false }));
-            return true; // keep channel open for async response
+            return true;
         }
     },
 );
@@ -113,7 +139,6 @@ async function drainOfflineQueue() {
 
     for (const item of queue) {
         if (!item.categoryId) {
-            // Cannot save without a category; remove stale item
             await dequeueOffline(item.id);
             continue;
         }
@@ -129,31 +154,19 @@ async function drainOfflineQueue() {
             });
             await dequeueOffline(item.id);
         } catch {
-            // Leave in queue; retry on next wake
             break;
         }
     }
 }
 
-// Periodic alarm-based drain (every 5 minutes when the SW is awake)
 if (chrome.alarms) {
     chrome.alarms.create("markme-sync", { periodInMinutes: 5 });
     chrome.alarms.onAlarm.addListener((alarm) => {
         if (alarm.name === "markme-sync") {
-            drainOfflineQueue();
+            void drainOfflineQueue();
         }
     });
 }
-
-// ---------------------------------------------------------------------------
-// chrome.bookmarks.onCreated — currently a no-op; user saves explicitly via popup
-// ---------------------------------------------------------------------------
-
-chrome.bookmarks.onCreated.addListener((_id, bookmark) => {
-    // Intentionally not auto-saving: the popup provides intentional, categorized saves.
-    // Remove this listener if you want to auto-mirror browser bookmarks.
-    void bookmark;
-});
 
 // ---------------------------------------------------------------------------
 // Helper: save a bookmark via the API (or enqueue offline)
@@ -169,11 +182,21 @@ async function saveBookmark({
     title: string;
 }) {
     const client = createVanillaClient(auth.token);
+    const prefs = await getPrefs();
+    let categoryId = prefs.lastCategoryId;
 
     try {
         const cats = await client.category.list.query();
-        const categoryId = cats[0]?.id;
-        if (!categoryId) return;
+        categoryId =
+            (prefs.lastCategoryId && cats.some((c) => c.id === prefs.lastCategoryId)
+                ? prefs.lastCategoryId
+                : undefined) ?? cats[0]?.id;
+
+        if (!categoryId) {
+            notify("mark_me", "Create a category in the web app first.");
+            chrome.tabs.create({ url: `${getWebAppUrl()}/dashboard` });
+            return;
+        }
 
         await client.bookmark.create.mutate({
             categoryId,
@@ -184,24 +207,22 @@ async function saveBookmark({
             pinned: false,
             faviconUrl: null,
         });
-
-        if (chrome.notifications) {
-            chrome.notifications.create({
-                type: "basic",
-                iconUrl: "icons/icon48.png",
-                title: "mark_me",
-                message: `"${title.slice(0, 60)}" saved.`,
-            });
-        }
+        await setPrefs({ lastCategoryId: categoryId });
+        notify("mark_me", `"${title.slice(0, 60)}" saved.`);
     } catch {
+        if (!categoryId) {
+            notify("mark_me", "Couldn’t save — connect online once to load categories.");
+            return;
+        }
         await enqueueOffline({
             id: crypto.randomUUID(),
             url,
             title,
-            categoryId: "",
+            categoryId,
             tags: [],
             notes: "",
             savedAt: Date.now(),
         });
+        notify("mark_me", "Saved offline — will sync when you’re back online.");
     }
 }
