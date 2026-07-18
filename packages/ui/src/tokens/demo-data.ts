@@ -1,4 +1,4 @@
-import type { Category } from "./types";
+import type { Category, MockUserEntry } from "./types";
 
 const _now = Date.now();
 const _h = (n: number) => _now - n * 3600000;
@@ -77,3 +77,19 @@ export const DEMO_DATA: Category[] = [
         ],
     },
 ];
+
+/** Password-gated demo accounts for Auth.js credentials → Neon users. */
+export const MOCK_USERS: Record<string, MockUserEntry> = {
+  "demo@markme.io": {
+    password: "mark_me1",
+    name: "Ajibola Genius",
+    plan: "pro",
+    joinedAt: "2025-11-14T00:00:00.000Z",
+  },
+  "free@markme.io": {
+    password: "test123",
+    name: "Free Tester",
+    plan: "free",
+    joinedAt: "2026-02-01T00:00:00.000Z",
+  },
+};

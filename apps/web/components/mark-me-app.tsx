@@ -1554,7 +1554,21 @@ function MobileNavOverlay({ onClose, items }) {
   );
 }
 
-function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
+function Dashboard({ user, onNavigate, onLogout }) {
+  const utils = trpc.useUtils();
+  const { data: categories = [], isLoading, refetch } = trpc.category.list.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+  });
+  const createCat = trpc.category.create.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const updateCat = trpc.category.update.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const deleteCatMut = trpc.category.delete.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const createBm = trpc.bookmark.create.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const updateBm = trpc.bookmark.update.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const deleteBmMut = trpc.bookmark.delete.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const togglePinMut = trpc.bookmark.togglePin.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const importJson = trpc.export.fromJSON.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+
   const [searchInput,setSearchInput]=useState("");
   const debouncedSearch = useDebounce(searchInput, 150);
   const [filterTag,setFilterTag]=useState(null);
@@ -1563,7 +1577,7 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
   const [confirmDel, setConfirmDel] = useState(null);
   const [sortBy, setSortBy] = useState("default");
   const [showAi, setShowAi] = useState(false);
-  const fileRef=useRef(null); const { flash, flashUndo, ToastEl } = useUndoToast();
+  const fileRef=useRef(null); const { flash, ToastEl } = useUndoToast();
   const isSearching = searchInput !== debouncedSearch;
 
   const allTags = useMemo(()=>[...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))],[categories]);
@@ -1581,34 +1595,127 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
     return result;
   },[categories,debouncedSearch,filterTag,sortBy]);
 
-  const saveCat=cat=>{if(categories.find(c=>c.id===cat.id))setCategories(categories.map(c=>c.id===cat.id?cat:c));else setCategories([...categories,cat]);setShowNewCat(false);setEditCat(null)};
-  const exportData=()=>{const b=new Blob([JSON.stringify(categories,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="markme_bookmarks.json";a.click();URL.revokeObjectURL(u);flash("Exported ✓")};
-  const importData=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(Array.isArray(d)){setCategories(d);flash("Imported ✓")}}catch{flash("Invalid file")}};r.readAsText(file);e.target.value=""};
-
-  // ── Category delete: confirm dialog → soft delete → undo toast ──
-  const requestDeleteCat = cat => setConfirmDel({ cat });
-  const confirmDeleteCat = () => {
-    const cat = confirmDel?.cat;
-    if (!cat) return;
-    const snapshot = [...categories];
-    setCategories(categories.filter(c => c.id !== cat.id));
-    setConfirmDel(null);
-    flashUndo(
-      `"${cat.name}" deleted`,
-      () => setCategories(snapshot)
-    );
+  const saveCat = async cat => {
+    try {
+      if (categories.find(c => c.id === cat.id)) {
+        await updateCat.mutateAsync({
+          id: cat.id,
+          name: cat.name,
+          emoji: cat.icon || "📁",
+          color: cat.color ?? 0,
+          tags: cat.tags || [],
+        });
+        flash("Category updated ✓");
+      } else {
+        await createCat.mutateAsync({
+          name: cat.name,
+          emoji: cat.icon || "📁",
+          color: cat.color ?? 0,
+          tags: cat.tags || [],
+        });
+        flash("Category created ✓");
+      }
+      setShowNewCat(false);
+      setEditCat(null);
+    } catch (err) {
+      flash(err?.message || "Could not save category");
+    }
   };
 
-  // ── Bookmark delete: instant soft delete → undo toast ──
-  const deleteBm = (catId, bmId, bmTitle) => {
-    const snapshot = [...categories];
-    setCategories(categories.map(c =>
-      c.id === catId ? { ...c, bookmarks: c.bookmarks.filter(b => b.id !== bmId) } : c
-    ));
-    flashUndo(
-      `"${bmTitle}" removed`,
-      () => setCategories(snapshot)
-    );
+  const exportData = async () => {
+    try {
+      const data = await utils.export.toJSON.fetch();
+      const b = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const u = URL.createObjectURL(b);
+      const a = document.createElement("a");
+      a.href = u;
+      a.download = "markme_bookmarks.json";
+      a.click();
+      URL.revokeObjectURL(u);
+      flash("Exported ✓");
+    } catch (err) {
+      flash(err?.message || "Export failed");
+    }
+  };
+
+  const importData = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = async ev => {
+      try {
+        const d = JSON.parse(ev.target.result);
+        const categoriesPayload = Array.isArray(d) ? d : d?.categories;
+        if (!Array.isArray(categoriesPayload)) {
+          flash("Invalid file");
+          return;
+        }
+        await importJson.mutateAsync({ categories: categoriesPayload });
+        flash("Imported ✓");
+      } catch (err) {
+        flash(err?.message || "Invalid file");
+      }
+    };
+    r.readAsText(file);
+    e.target.value = "";
+  };
+
+  const requestDeleteCat = cat => setConfirmDel({ cat });
+  const confirmDeleteCat = async () => {
+    const cat = confirmDel?.cat;
+    if (!cat) return;
+    setConfirmDel(null);
+    try {
+      await deleteCatMut.mutateAsync({ id: cat.id });
+      flash(`"${cat.name}" deleted`);
+    } catch (err) {
+      flash(err?.message || "Delete failed");
+    }
+  };
+
+  const deleteBm = async (catId, bmId, bmTitle) => {
+    try {
+      await deleteBmMut.mutateAsync({ id: bmId });
+      flash(`"${bmTitle}" removed`);
+    } catch (err) {
+      flash(err?.message || "Delete failed");
+    }
+  };
+
+  const saveBm = async (categoryId, bm) => {
+    try {
+      if (bm.id && categories.some(c => c.bookmarks.some(b => b.id === bm.id))) {
+        await updateBm.mutateAsync({
+          id: bm.id,
+          title: bm.title,
+          url: bm.url,
+          note: bm.note || null,
+          tags: bm.tags || [],
+          categoryId,
+        });
+        flash("Bookmark updated ✓");
+      } else {
+        await createBm.mutateAsync({
+          categoryId,
+          title: bm.title,
+          url: bm.url,
+          note: bm.note || undefined,
+          tags: bm.tags || [],
+          pinned: bm.pinned || false,
+        });
+        flash("Bookmark added ✓");
+      }
+    } catch (err) {
+      flash(err?.message || "Could not save bookmark");
+    }
+  };
+
+  const togglePin = async id => {
+    try {
+      await togglePinMut.mutateAsync({ id });
+    } catch (err) {
+      flash(err?.message || "Could not update pin");
+    }
   };
 
   const totalBm=categories.reduce((a,c)=>a+c.bookmarks.length,0);
@@ -1660,7 +1767,10 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         ]} />}
 
       <main id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"16px 16px 60px", position:"relative", zIndex:1 }}>
-        <PullToRefresh onRefresh={() => { setCategories([...categories]); flash("Refreshed ✓"); }}>
+        {isLoading && (
+          <div style={{ textAlign:"center", padding:"40px 20px", color:T.textMuted, fontSize:13, fontWeight:600 }}>Loading your bookmarks from Neon…</div>
+        )}
+        <PullToRefresh onRefresh={async () => { await refetch(); flash("Refreshed ✓"); }}>
         {/* Mobile search */}
         <div className="mm-mob-search" style={{ display:"none", marginBottom:14 }}>
           <div role="search" style={{ display:"flex", alignItems:"center", gap:6, background:T.bgInput, border:`1px solid ${searchInput ? T.primary+"60" : T.border}`, padding:"8px 12px", transition:"border-color 0.2s" }}>
@@ -1707,7 +1817,8 @@ function Dashboard({ user, categories, setCategories, onNavigate, onLogout }) {
         <VirtualMasonry items={filtered} columnCount={3} gap={14}
           renderItem={(cat, i) => (
             <CatCard cat={cat} allTags={allTags} searchQuery={debouncedSearch}
-              onUpdate={c=>setCategories(categories.map(x=>x.id===c.id?c:x))}
+              onTogglePin={togglePin}
+              onSaveBm={saveBm}
               onDelete={requestDeleteCat}
               onDeleteBm={deleteBm}
               onEdit={c=>setEditCat(c)} />
@@ -2039,36 +2150,73 @@ function AiPanel({ open, onClose, categories }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const buildContext = () => {
-    return categories.map(c =>
-      `Category "${c.name}" (${c.icon}, tags: ${c.tags?.join(", ")||"none"}):\n` +
-      c.bookmarks.map(b => `  - "${b.title}" ${b.url} [tags: ${b.tags?.join(", ")||"none"}]${b.pinned?" (pinned)":""}${b.note?` note: ${b.note}`:""}`).join("\n")
-    ).join("\n\n");
-  };
-
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userMsg = input.trim();
     setInput("");
-    setMessages(prev => [...prev, { role:"user", text:userMsg }]);
+    setMessages(prev => [...prev, { role:"user", text:userMsg }, { role:"ai", text:"" }]);
     setLoading(true);
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: `You are the AI assistant for mark_me, a bookmark manager app. The user has the following bookmarks:\n\n${buildContext()}\n\nHelp the user organize, tag, summarize, and discover insights about their bookmarks. Be concise and helpful. When suggesting tags, format them as comma-separated lowercase words. When summarizing, be brief (2-3 sentences max). If asked to find duplicates or suggest reorganization, analyze the data and give specific actionable suggestions.`,
-          messages: [{ role:"user", content: userMsg }],
-        }),
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg }),
       });
-      const data = await res.json();
-      const aiText = data.content?.map(c => c.text || "").join("") || "Sorry, I couldn't process that request.";
-      setMessages(prev => [...prev, { role:"ai", text:aiText }]);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Request failed (${res.status})`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let aiText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+        for (const part of parts) {
+          const line = part.split("\n").find(l => l.startsWith("data: "));
+          if (!line) continue;
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") continue;
+          try {
+            const data = JSON.parse(payload);
+            if (data.error) throw new Error(data.error);
+            if (data.text) {
+              aiText += data.text;
+              setMessages(prev => {
+                const next = [...prev];
+                next[next.length - 1] = { role: "ai", text: aiText };
+                return next;
+              });
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof Error && parseErr.message !== "Unexpected end of JSON input") {
+              // keep streaming on partial JSON; rethrow real errors
+              if (!String(parseErr.message).includes("JSON")) throw parseErr;
+            }
+          }
+        }
+      }
+      if (!aiText) {
+        setMessages(prev => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "ai", text: "No response from AI. Set ANTHROPIC_API_KEY on the server for live answers." };
+          return next;
+        });
+      }
     } catch (err) {
-      setMessages(prev => [...prev, { role:"ai", text:"Connection error. Please try again." }]);
+      setMessages(prev => {
+        const next = [...prev];
+        next[next.length - 1] = { role: "ai", text: err?.message || "Connection error. Please try again." };
+        return next;
+      });
     }
     setLoading(false);
   };
@@ -2167,18 +2315,20 @@ export default function App() {
   const { data: session, status } = useSession();
   const [page, setPage] = useState("landing");
   const [user, setUser] = useState(null);
-  const [categories, setCategories] = useState(() => {
-    try { const s = sessionStorage.getItem("mm_cats"); return s ? JSON.parse(s) : DEMO_DATA; } catch { return DEMO_DATA; }
+  const isAuthed = status === "authenticated" && !!session?.user;
+
+  const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
+    enabled: isAuthed,
+    retry: 1,
   });
 
-  useEffect(() => { try { sessionStorage.setItem("mm_cats", JSON.stringify(categories)); } catch {} }, [categories]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [page]);
 
-  // Hydrate from Auth.js session (Neon-backed users via OAuth / magic link)
   useEffect(() => {
     if (status === "loading") return;
     if (session?.user) {
       setUser({
+        id: session.user.id,
         name: session.user.name || session.user.email?.split("@")[0] || "User",
         email: session.user.email || "",
         avatar: session.user.image || null,
@@ -2205,6 +2355,14 @@ export default function App() {
     tags: [...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))].length,
   };
 
+  if (status === "loading") {
+    return (
+      <div style={{ minHeight:"100vh", background:T.bg, color:T.textMuted, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:T.font, fontSize:14, fontWeight:600 }}>
+        Loading…
+      </div>
+    );
+  }
+
   return (
     <>
       <style>{`
@@ -2224,13 +2382,14 @@ export default function App() {
       <PageTransition pageKey={page}>
         {page === "landing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The landing page encountered an error."><LandingPage onNavigate={navigate} /></ErrorBoundary>}
         {page === "pricing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The pricing page encountered an error."><PricingPage onNavigate={navigate} /></ErrorBoundary>}
-        {page === "newtab" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The new tab page encountered an error."><NewTabPage onNavigate={navigate} categories={categories} /></ErrorBoundary>}
+        {page === "newtab" && user && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The new tab page encountered an error."><NewTabPage onNavigate={navigate} categories={categories} /></ErrorBoundary>}
         {page === "login" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The login form encountered an error."><AuthPage mode="login" onNavigate={navigate} /></ErrorBoundary>}
         {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} /></ErrorBoundary>}
         {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
-        {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} categories={categories} setCategories={setCategories} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
-        {page === "dashboard" && !user && (() => { setPage("login"); return null; })()}
-        {page === "profile" && !user && (() => { setPage("login"); return null; })()}
+        {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
+        {page === "dashboard" && !user && status === "unauthenticated" && (() => { setPage("login"); return null; })()}
+        {page === "profile" && !user && status === "unauthenticated" && (() => { setPage("login"); return null; })()}
+        {page === "newtab" && !user && status === "unauthenticated" && (() => { setPage("login"); return null; })()}
       </PageTransition>
     </>
   );
