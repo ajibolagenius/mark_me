@@ -182,6 +182,9 @@ importers:
       '@markme/config':
         specifier: workspace:*
         version: link:../config
+      '@types/node':
+        specifier: ^22.19.15
+        version: 22.19.15
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

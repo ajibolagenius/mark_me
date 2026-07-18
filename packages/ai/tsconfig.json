@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": false,
-    "lib": ["ESNext"]
+    "types": ["node"]
   },
   "include": ["src"]
 }
