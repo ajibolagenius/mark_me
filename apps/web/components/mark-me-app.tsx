@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   T, TAG_COLORS, ACCENTS, MOCK_USERS,
@@ -149,17 +150,20 @@ const S = {
   input: { width:"100%", padding:"12px 14px", background:T.bgInput, border:`1px solid ${T.border}`, borderRadius:0, color:T.text, fontSize:14, fontFamily:T.font, outline:"none", boxSizing:"border-box", transition:"border-color 0.2s" },
 };
 
-/* Modal — desktop: centered dialog, mobile: bottom sheet with drag handle */
+/* Modal — portaled to body so CatCard overflow/transform cannot clip it */
 function Modal({ open, onClose, title, children, wide }) {
   const trapRef = useFocusTrap(open);
   const titleId = useRef(`modal-title-${Math.random().toString(36).slice(2,6)}`).current;
   const isMobile = useIsMobile();
+  const [mounted, setMounted] = useState(false);
 
   // Drag-to-dismiss for bottom sheet
   const dragStartY = useRef(0);
   const dragDist = useRef(0);
   const [sheetOffset, setSheetOffset] = useState(0);
   const dragging = useRef(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const onDragStart = e => {
     if (!isMobile) return;
@@ -189,65 +193,65 @@ function Modal({ open, onClose, title, children, wide }) {
     if (!open) return;
     const onKey = e => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
-    // Prevent body scroll on mobile when modal open
-    if (isMobile) document.body.style.overflow = "hidden";
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflow = prev;
     };
-  }, [open, onClose, isMobile]);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) setSheetOffset(0);
   }, [open]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  if (isMobile) {
-    // Bottom sheet mode
-    return (
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
-        style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", flexDirection:"column", justifyContent:"flex-end", background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .1s ease" }}
-        onClick={onClose}>
-        <div onClick={e=>e.stopPropagation()} style={{
-          background:T.bgEl, borderTop:`1px solid ${T.border}`, maxHeight:"88vh", overflowY:"auto",
-          animation:"mmSheetUp .25s cubic-bezier(0.32,0.72,0,1)",
-          transform:`translateY(${sheetOffset}px)`,
-          transition: dragging.current ? "none" : "transform 0.25s cubic-bezier(0.32,0.72,0,1)",
-          WebkitOverflowScrolling:"touch",
-        }}>
-          {/* Drag handle */}
-          <div onTouchStart={onDragStart} onTouchMove={onDragMove} onTouchEnd={onDragEnd}
-            style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center", cursor:"grab", touchAction:"none" }}>
-            <div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} />
-          </div>
-          <div style={{ padding:"14px 20px 24px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
-              <h2 id={titleId} style={{ fontFamily:T.font, fontSize:17, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
-              <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
-            </div>
-            {children}
-          </div>
-          {/* Safe area padding for notched devices */}
-          <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)" }} />
+  const panel = isMobile ? (
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
+      style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", flexDirection:"column", justifyContent:"flex-end", background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .1s ease" }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:T.bgEl, borderTop:`1px solid ${T.border}`, maxHeight:"88vh",
+        display:"flex", flexDirection:"column", minHeight:0,
+        animation:"mmSheetUp .25s cubic-bezier(0.32,0.72,0,1)",
+        transform:`translateY(${sheetOffset}px)`,
+        transition: dragging.current ? "none" : "transform 0.25s cubic-bezier(0.32,0.72,0,1)",
+      }}>
+        <div onTouchStart={onDragStart} onTouchMove={onDragMove} onTouchEnd={onDragEnd}
+          style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center", cursor:"grab", touchAction:"none", flexShrink:0 }}>
+          <div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} />
         </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:0, padding:"14px 20px 0", flexShrink:0 }}>
+          <h2 id={titleId} style={{ fontFamily:T.font, fontSize:17, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
+          <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
+        </div>
+        <div className="mm-modal-scroll" style={{ padding:"18px 20px", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", minHeight:0, flex:1 }}>
+          {children}
+        </div>
+        <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)", flexShrink:0 }} />
       </div>
-    );
-  }
-
-  // Desktop centered dialog
-  return (
+    </div>
+  ) : (
     <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
       style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:T.bgEl, border:`1px solid ${T.border}`, padding:"24px 28px", width:wide?520:420, maxWidth:"100%", maxHeight:"85vh", overflowY:"auto", boxShadow:"8px 8px 0 rgba(0,0,0,0.5)", animation:"mmSlideUp .2s ease" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:T.bgEl, border:`1px solid ${T.border}`, width:wide?520:420, maxWidth:"100%",
+        maxHeight:"85vh", display:"flex", flexDirection:"column", minHeight:0,
+        boxShadow:"8px 8px 0 rgba(0,0,0,0.5)", animation:"mmSlideUp .2s ease",
+      }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"24px 28px 0", flexShrink:0 }}>
           <h2 id={titleId} style={{ fontFamily:T.font, fontSize:18, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
           <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
         </div>
-        {children}
+        <div className="mm-modal-scroll" style={{ padding:"20px 28px 24px", overflowY:"auto", overscrollBehavior:"contain", minHeight:0, flex:1 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
+
+  return createPortal(panel, document.body);
 }
 
 /* Field */
@@ -396,7 +400,7 @@ function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, cou
     </>
   );
 
-  return (
+  return createPortal(
     <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={`${titleId}-desc`} ref={trapRef}
       style={{
         position:"fixed", inset:0, zIndex:1100,
@@ -414,7 +418,8 @@ function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, cou
         {isMobile && <div style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center" }}><div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} /></div>}
         {content}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1873,10 +1878,10 @@ function Dashboard({ user, onNavigate, onLogout }) {
         *:focus-visible{outline:2px solid ${T.primary};outline-offset:2px}
         input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:${T.primary}!important}
         .mm-bm-actions:focus-within{opacity:1!important}
-        .mm-cat-scroll{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.18) transparent}
-        .mm-cat-scroll::-webkit-scrollbar{width:4px}
-        .mm-cat-scroll::-webkit-scrollbar-track{background:transparent}
-        .mm-cat-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.18)}
+        .mm-cat-scroll,.mm-modal-scroll{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.18) transparent}
+        .mm-cat-scroll::-webkit-scrollbar,.mm-modal-scroll::-webkit-scrollbar{width:4px}
+        .mm-cat-scroll::-webkit-scrollbar-track,.mm-modal-scroll::-webkit-scrollbar-track{background:transparent}
+        .mm-cat-scroll::-webkit-scrollbar-thumb,.mm-modal-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.18)}
       `}</style>
     </div>
   );
