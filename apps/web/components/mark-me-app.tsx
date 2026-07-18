@@ -7,6 +7,17 @@ import {
   uid, getDomain, getFavicon, tagColor,
 } from "@markme/ui";
 import { authClient } from "@/lib/auth/client";
+import {
+  clearLastUser,
+  createOutboxId,
+  flushOutbox,
+  getLastUser,
+  notifyOutboxChanged,
+  queueAndPatch,
+  setLastUser,
+  useOnlineStatus,
+  useOutboxCount,
+} from "@/lib/offline";
 import { trpc } from "@/lib/trpc";
 
 /* ── Relative time formatter ── */
@@ -1644,9 +1655,11 @@ function MobileNavOverlay({ onClose, items }) {
 
 function Dashboard({ user, onNavigate, onLogout }) {
   const utils = trpc.useUtils();
+  const online = useOnlineStatus();
+  const outboxCount = useOutboxCount();
   const { data: categories = [], isLoading, refetch } = trpc.category.list.useQuery(undefined, {
     enabled: !!user,
-    retry: 1,
+    retry: online ? 1 : 0,
   });
   const createCat = trpc.category.create.useMutation({ onSuccess: () => utils.category.list.invalidate() });
   const updateCat = trpc.category.update.useMutation({ onSuccess: () => utils.category.list.invalidate() });
@@ -1668,6 +1681,23 @@ function Dashboard({ user, onNavigate, onLogout }) {
   const fileRef=useRef(null); const { flash, ToastEl } = useUndoToast();
   const isSearching = searchInput !== debouncedSearch;
 
+  useEffect(() => {
+    if (!online) return;
+    let cancelled = false;
+    (async () => {
+      const result = await flushOutbox(utils.client);
+      if (cancelled) return;
+      if (result.synced > 0) {
+        notifyOutboxChanged();
+        await utils.category.list.invalidate();
+        flash(`Synced ${result.synced} change${result.synced === 1 ? "" : "s"} ✓`);
+      } else {
+        notifyOutboxChanged();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [online]);
+
   const allTags = useMemo(()=>[...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))],[categories]);
   const filtered = useMemo(()=>{
     const q = debouncedSearch;
@@ -1686,22 +1716,27 @@ function Dashboard({ user, onNavigate, onLogout }) {
   const saveCat = async cat => {
     try {
       if (categories.find(c => c.id === cat.id)) {
-        await updateCat.mutateAsync({
+        const input = {
           id: cat.id,
           name: cat.name,
           emoji: cat.icon || "📁",
           color: cat.color ?? 0,
           tags: cat.tags || [],
-        });
-        flash("Category updated ✓");
+        };
+        const offline = await queueAndPatch(utils.category.list, "category.update", input);
+        if (!offline.queued) await updateCat.mutateAsync(input);
+        flash(offline.queued ? "Category updated (pending sync)" : "Category updated ✓");
       } else {
-        await createCat.mutateAsync({
+        const clientId = cat.id || createOutboxId();
+        const input = {
           name: cat.name,
           emoji: cat.icon || "📁",
           color: cat.color ?? 0,
           tags: cat.tags || [],
-        });
-        flash("Category created ✓");
+        };
+        const offline = await queueAndPatch(utils.category.list, "category.create", input, { clientId });
+        if (!offline.queued) await createCat.mutateAsync(input);
+        flash(offline.queued ? "Category created (pending sync)" : "Category created ✓");
       }
       setShowNewCat(false);
       setEditCat(null);
@@ -1711,6 +1746,7 @@ function Dashboard({ user, onNavigate, onLogout }) {
   };
 
   const exportData = async () => {
+    if (!online) { flash("Export needs a connection"); return; }
     try {
       const data = await utils.export.toJSON.fetch();
       const b = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1727,6 +1763,7 @@ function Dashboard({ user, onNavigate, onLogout }) {
   };
 
   const importData = e => {
+    if (!online) { flash("Import needs a connection"); e.target.value = ""; return; }
     const file = e.target.files?.[0];
     if (!file) return;
     const r = new FileReader();
@@ -1754,8 +1791,10 @@ function Dashboard({ user, onNavigate, onLogout }) {
     if (!cat) return;
     setConfirmDel(null);
     try {
-      await deleteCatMut.mutateAsync({ id: cat.id });
-      flash(`"${cat.name}" deleted`);
+      const input = { id: cat.id };
+      const offline = await queueAndPatch(utils.category.list, "category.delete", input);
+      if (!offline.queued) await deleteCatMut.mutateAsync(input);
+      flash(offline.queued ? `"${cat.name}" deleted (pending sync)` : `"${cat.name}" deleted`);
     } catch (err) {
       flash(err?.message || "Delete failed");
     }
@@ -1763,8 +1802,10 @@ function Dashboard({ user, onNavigate, onLogout }) {
 
   const deleteBm = async (catId, bmId, bmTitle) => {
     try {
-      await deleteBmMut.mutateAsync({ id: bmId });
-      flash(`"${bmTitle}" removed`);
+      const input = { id: bmId };
+      const offline = await queueAndPatch(utils.category.list, "bookmark.delete", input);
+      if (!offline.queued) await deleteBmMut.mutateAsync(input);
+      flash(offline.queued ? `"${bmTitle}" removed (pending sync)` : `"${bmTitle}" removed`);
     } catch (err) {
       flash(err?.message || "Delete failed");
     }
@@ -1773,25 +1814,30 @@ function Dashboard({ user, onNavigate, onLogout }) {
   const saveBm = async (categoryId, bm) => {
     try {
       if (bm.id && categories.some(c => c.bookmarks.some(b => b.id === bm.id))) {
-        await updateBm.mutateAsync({
+        const input = {
           id: bm.id,
           title: bm.title,
           url: bm.url,
           note: bm.note || null,
           tags: bm.tags || [],
           categoryId,
-        });
-        flash("Bookmark updated ✓");
+        };
+        const offline = await queueAndPatch(utils.category.list, "bookmark.update", input);
+        if (!offline.queued) await updateBm.mutateAsync(input);
+        flash(offline.queued ? "Bookmark updated (pending sync)" : "Bookmark updated ✓");
       } else {
-        await createBm.mutateAsync({
+        const clientId = bm.id || createOutboxId();
+        const input = {
           categoryId,
           title: bm.title,
           url: bm.url,
           note: bm.note || undefined,
           tags: bm.tags || [],
           pinned: bm.pinned || false,
-        });
-        flash("Bookmark added ✓");
+        };
+        const offline = await queueAndPatch(utils.category.list, "bookmark.create", input, { clientId });
+        if (!offline.queued) await createBm.mutateAsync(input);
+        flash(offline.queued ? "Bookmark added (pending sync)" : "Bookmark added ✓");
       }
     } catch (err) {
       flash(err?.message || "Could not save bookmark");
@@ -1800,7 +1846,9 @@ function Dashboard({ user, onNavigate, onLogout }) {
 
   const togglePin = async id => {
     try {
-      await togglePinMut.mutateAsync({ id });
+      const input = { id };
+      const offline = await queueAndPatch(utils.category.list, "bookmark.togglePin", input);
+      if (!offline.queued) await togglePinMut.mutateAsync(input);
     } catch (err) {
       flash(err?.message || "Could not update pin");
     }
@@ -1824,11 +1872,11 @@ function Dashboard({ user, onNavigate, onLogout }) {
               {isSearching && <div style={{ width:12, height:12, border:`2px solid ${T.primary}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite", flexShrink:0 }} />}
               {searchInput&&<button onClick={()=>setSearchInput("")} aria-label="Clear search" style={{ ...S.btn, background:"none", padding:2, color:T.textMuted }}><I.X s={12}/></button>}
             </div>
-            <button onClick={exportData} title="Export" aria-label="Export bookmarks as JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Export /></button>
-            <button onClick={()=>fileRef.current?.click()} title="Import" aria-label="Import bookmarks from JSON" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"6px 10px", border:`1px solid ${T.border}` }} onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}><I.Import /></button>
+            <button onClick={exportData} disabled={!online} title={online ? "Export" : "Export needs a connection"} aria-label="Export bookmarks as JSON" style={{ ...S.btn, background:"transparent", color:online?T.textSec:T.textMuted, padding:"6px 10px", border:`1px solid ${T.border}`, opacity:online?1:0.45, cursor:online?"pointer":"not-allowed" }} onMouseEnter={e=>{if(!online)return;e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=online?T.textSec:T.textMuted}}><I.Export /></button>
+            <button onClick={()=>{ if (!online) { flash("Import needs a connection"); return; } fileRef.current?.click(); }} disabled={!online} title={online ? "Import" : "Import needs a connection"} aria-label="Import bookmarks from JSON" style={{ ...S.btn, background:"transparent", color:online?T.textSec:T.textMuted, padding:"6px 10px", border:`1px solid ${T.border}`, opacity:online?1:0.45, cursor:online?"pointer":"not-allowed" }} onMouseEnter={e=>{if(!online)return;e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=online?T.textSec:T.textMuted}}><I.Import /></button>
             <input ref={fileRef} type="file" accept=".json" onChange={importData} style={{ display:"none" }} aria-hidden="true" tabIndex={-1} />
-            <button onClick={()=>setShowAi(true)} title="AI Assistant" aria-label="Open AI assistant" style={{ ...S.btn, background:T.primarySubtle, color:T.primary, padding:"6px 10px", border:`1px solid ${T.primary}30`, position:"relative" }}
-              onMouseEnter={e=>{e.currentTarget.style.background=T.primary+"25"}} onMouseLeave={e=>{e.currentTarget.style.background=T.primarySubtle}}>
+            <button onClick={()=>{ if (!online) { flash("AI needs a connection"); return; } setShowAi(true); }} disabled={!online} title={online ? "AI Assistant" : "AI needs a connection"} aria-label="Open AI assistant" style={{ ...S.btn, background:T.primarySubtle, color:online?T.primary:T.textMuted, padding:"6px 10px", border:`1px solid ${T.primary}30`, position:"relative", opacity:online?1:0.45, cursor:online?"pointer":"not-allowed" }}
+              onMouseEnter={e=>{if(!online)return;e.currentTarget.style.background=T.primary+"25"}} onMouseLeave={e=>{e.currentTarget.style.background=T.primarySubtle}}>
               <I.Sparkle /><span style={{ position:"absolute", top:-2, right:-2, width:6, height:6, background:T.secondary, borderRadius:"50%" }} />
             </button>
             <button onClick={()=>setShowNewCat(true)} aria-label="Create new category" style={{ ...S.btn, background:"#fff", color:T.bg, padding:"7px 16px", fontWeight:800, fontSize:13, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)", transition:"all 0.15s cubic-bezier(0.4,0,0.2,1)" }}
@@ -1847,16 +1895,42 @@ function Dashboard({ user, onNavigate, onLogout }) {
       {mobileNav && <MobileNavOverlay onClose={()=>setMobileNav(false)}
         items={[
           {icon:<I.Plus />,label:"New Category",fn:()=>{setShowNewCat(true);setMobileNav(false)}},
-          {icon:<I.Sparkle />,label:"AI Assistant",fn:()=>{setShowAi(true);setMobileNav(false)}},
-          {icon:<I.Export />,label:"Export",fn:()=>{exportData();setMobileNav(false)}},
-          {icon:<I.Import />,label:"Import",fn:()=>{fileRef.current?.click();setMobileNav(false)}},
+          {icon:<I.Sparkle />,label:online?"AI Assistant":"AI (online only)",fn:()=>{ if (!online) { flash("AI needs a connection"); setMobileNav(false); return; } setShowAi(true);setMobileNav(false)}},
+          {icon:<I.Export />,label:online?"Export":"Export (online only)",fn:()=>{exportData();setMobileNav(false)}},
+          {icon:<I.Import />,label:online?"Import":"Import (online only)",fn:()=>{ if (!online) { flash("Import needs a connection"); setMobileNav(false); return; } fileRef.current?.click();setMobileNav(false)}},
           {icon:<I.User />,label:"Profile",fn:()=>{onNavigate("profile");setMobileNav(false)}},
           {icon:<I.LogOut />,label:"Log out",fn:()=>{onLogout();setMobileNav(false)}},
         ]} />}
 
+      {(!online || outboxCount > 0) && (
+        <div role="status" aria-live="polite" style={{
+          background: !online ? T.secondarySubtle : T.primarySubtle,
+          borderBottom: `1px solid ${!online ? T.secondary+"40" : T.primary+"40"}`,
+          color: !online ? T.secondary : T.primary,
+          padding: "8px 16px",
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: T.font,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          position: "relative",
+          zIndex: 99,
+        }}>
+          <I.Cloud />
+          {!online
+            ? `You're offline${outboxCount ? ` · ${outboxCount} change${outboxCount === 1 ? "" : "s"} will sync later` : " · browsing last synced bookmarks"}`
+            : `Syncing ${outboxCount} pending change${outboxCount === 1 ? "" : "s"}…`}
+        </div>
+      )}
+
       <main id="main-content" style={{ maxWidth:1100, margin:"0 auto", padding:"16px 16px 60px", position:"relative", zIndex:1 }}>
-        {isLoading && (
+        {isLoading && !categories.length && (
           <div style={{ textAlign:"center", padding:"40px 20px", color:T.textMuted, fontSize:13, fontWeight:600 }}>Loading your bookmarks from Neon…</div>
+        )}
+        {!isLoading && !online && !categories.length && (
+          <div style={{ textAlign:"center", padding:"40px 20px", color:T.textMuted, fontSize:13, fontWeight:600 }}>No cached bookmarks yet. Connect once to sync your library.</div>
         )}
         <PullToRefresh onRefresh={async () => { await refetch(); flash("Refreshed ✓"); }}>
         {/* Mobile search */}
@@ -2409,26 +2483,43 @@ function AiPanel({ open, onClose, categories }) {
    ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
   const { data: session, isPending } = authClient.useSession();
+  const online = useOnlineStatus();
   const [page, setPage] = useState("landing");
   const [user, setUser] = useState(null);
+  const [offlineReady, setOfflineReady] = useState(false);
   const neonUser = session?.user;
-  const isAuthed = !!neonUser?.id;
+  const isAuthed = !!neonUser?.id || (!!user?.id && !online);
 
   const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
     enabled: isAuthed,
-    retry: 1,
+    retry: online ? 1 : 0,
   });
   const { data: profile } = trpc.user.me.useQuery(undefined, {
-    enabled: isAuthed,
-    retry: 1,
+    enabled: !!neonUser?.id,
+    retry: online ? 1 : 0,
   });
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [page]);
 
+  // Restore last-known user when offline so the dashboard can mount with cached data.
   useEffect(() => {
-    if (isPending) return;
+    let cancelled = false;
+    (async () => {
+      const snap = await getLastUser();
+      if (cancelled) return;
+      if (!navigator.onLine && snap && !session?.user) {
+        setUser(snap);
+        setPage(p => (p === "landing" || p === "login" || p === "signup" ? "dashboard" : p));
+      }
+      setOfflineReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (isPending && online) return;
     if (neonUser) {
-      setUser({
+      const next = {
         id: neonUser.id,
         name: profile?.name || neonUser.name || neonUser.email?.split("@")[0] || "User",
         email: profile?.email || neonUser.email || "",
@@ -2437,15 +2528,18 @@ export default function App() {
         joinedAt: profile?.createdAt
           ? (profile.createdAt instanceof Date ? profile.createdAt.toISOString() : String(profile.createdAt))
           : new Date().toISOString(),
-      });
+      };
+      setUser(next);
+      void setLastUser(next);
       setPage(p => (p === "landing" || p === "login" || p === "signup" ? "dashboard" : p));
-    } else {
+    } else if (online && offlineReady) {
       setUser(null);
     }
-  }, [neonUser, profile, isPending]);
+  }, [neonUser, profile, isPending, online, offlineReady]);
 
   const logout = async () => {
-    await authClient.signOut();
+    await clearLastUser();
+    if (online) await authClient.signOut();
     setUser(null);
     setPage("landing");
   };
@@ -2458,7 +2552,7 @@ export default function App() {
     tags: [...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))].length,
   };
 
-  if (isPending) {
+  if ((isPending && online) || (!offlineReady && !neonUser)) {
     return (
       <div style={{ minHeight:"100vh", background:T.bg, color:T.textMuted, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:T.font, fontSize:14, fontWeight:600 }}>
         Loading…
@@ -2490,8 +2584,8 @@ export default function App() {
         {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} /></ErrorBoundary>}
         {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
         {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
-        {page === "dashboard" && !user && !isPending && !neonUser && (() => { setPage("login"); return null; })()}
-        {page === "profile" && !user && !isPending && !neonUser && (() => { setPage("login"); return null; })()}
+        {page === "dashboard" && !user && !isPending && !neonUser && online && (() => { setPage("login"); return null; })()}
+        {page === "profile" && !user && !isPending && !neonUser && online && (() => { setPage("login"); return null; })()}
       </PageTransition>
     </>
   );

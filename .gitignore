@@ -43,3 +43,7 @@ apps/current/package-lock.json
 apps/current/dist/
 apps/current/node_modules/
 .neon
+
+# Serwist
+apps/web/public/sw*
+apps/web/public/swe-worker*

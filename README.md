@@ -12,6 +12,7 @@ Includes a **Next.js** web app, a **Chrome extension** (popup + new tab), and sh
 - Chrome extension: one-click save + new-tab dashboard
 - AI assistant for tagging, summaries, and collection Q&A (OpenRouter)
 - Export / import JSON
+- Installable **PWA** with offline bookmark browsing and queued edits
 - Shared neo-brutalist design system (`@markme/ui`)
 
 ## Monorepo layout
@@ -116,6 +117,19 @@ pnpm --filter @markme/extension dev
 ```
 
 Load `apps/extension/dist` as an unpacked extension in `chrome://extensions`. Set `VITE_API_URL` to your web origin.
+
+## PWA / offline
+
+The web app is installable (manifest + service worker via Serwist). Production builds register the worker; `pnpm dev` keeps it disabled so Turbopack stays simple.
+
+**How offline works**
+
+1. Sign in online once — `category.list` and `user.me` are persisted to IndexedDB (about 7 days).
+2. Offline, the dashboard opens from that cache (last-user snapshot if the session check cannot reach Neon Auth).
+3. Category/bookmark create, update, delete, and pin toggle queue locally and sync when you reconnect.
+4. AI, import/export, and auth still need a network connection.
+
+Install from the browser (“Install app” / Add to Home Screen) on a deployed HTTPS origin. Chrome DevTools → Application is useful for inspecting the service worker and cache.
 
 ## Scripts
 
