@@ -28,13 +28,6 @@ export interface User {
     bio?: string;
 }
 
-export interface MockUserEntry {
-    password: string;
-    name: string;
-    plan: "free" | "pro" | "team";
-    joinedAt: string;
-}
-
 export interface AppStats {
     cats: number;
     bms: number;

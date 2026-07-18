@@ -1,12 +1,12 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { signIn, signOut, useSession } from "next-auth/react";
 import {
-  T, TAG_COLORS, ACCENTS, MOCK_USERS,
+  T, TAG_COLORS, ACCENTS,
   Logo, Atmosphere,
   uid, getDomain, getFavicon, tagColor,
 } from "@markme/ui";
+import { authClient } from "@/lib/auth/client";
 import { trpc } from "@/lib/trpc";
 
 /* ── Relative time formatter ── */
@@ -937,37 +937,6 @@ function LandingPage({ onNavigate }) {
           </div>
         </div>
 
-        {/* Preview mockup */}
-        <div style={{ marginTop:60, background:T.bgEl, border:`1px solid ${T.border}`, padding:3, boxShadow:"8px 8px 0 rgba(0,0,0,0.4)", position:"relative", animation:"mmCardSpring .6s cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both", overflow:"hidden" }}>
-          <div style={{ background:T.bgPanel, padding:"12px 16px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:8 }} aria-hidden="true">
-            <div style={{ display:"flex", gap:5 }}>{[T.error,"#F59E0B",T.success].map((c,i)=><div key={i} style={{ width:8, height:8, borderRadius:"50%", background:c, opacity:0.6 }} />)}</div>
-            <div style={{ flex:1, background:T.bgInput, border:`1px solid ${T.border}`, padding:"4px 10px", fontSize:11, color:T.textMuted }}>app.markme.io/dashboard</div>
-          </div>
-          <div style={{ padding:20, display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, minHeight:180 }} aria-hidden="true">
-            {[
-              { title:"Dribbble", note:"Daily design inspiration", tags:["design","ui/ux"] },
-              { title:"GitHub", note:"Code hosting & collab", tags:["dev"] },
-              { title:"Notion", note:"All-in-one workspace", tags:["work","apps"] },
-              { title:"Figma", note:"Design tool of choice", tags:["design"] },
-              { title:"Hugging Face", note:"ML models hub", tags:["ai","research"] },
-              { title:"Linear", note:"Issue tracking done right", tags:["work"] },
-            ].map((card, i) => {
-              const ac = ACCENTS[i % ACCENTS.length];
-              return (
-                <div key={i} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", minHeight: i%3===0 ? 120 : 80, textAlign:"left" }}>
-                  <div style={{ height:3, background:ac.bg }} />
-                  <div style={{ padding:10 }}>
-                    <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4, letterSpacing:"-0.02em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{card.title}</div>
-                    <div style={{ fontSize:10, color:T.textMuted, marginBottom:8, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{card.note}</div>
-                    <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>{card.tags.map(t=>(
-                      <span key={t} style={{ fontSize:9, fontWeight:700, color:ac.bg, background:ac.bg+"18", border:`1px solid ${ac.bg}30`, padding:"1px 6px", textTransform:"uppercase", letterSpacing:"0.03em" }}>{t}</span>
-                    ))}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </section>
 
       {/* Features */}
@@ -1033,52 +1002,55 @@ function LandingPage({ onNavigate }) {
    ══════════════════════════════════════════════════════════════════════════ */
 function AuthPage({ mode, onNavigate }) {
   const isLogin = mode === "login";
-  const [email, setEmail] = useState(isLogin ? "demo@markme.io" : "");
-  const [pass, setPass] = useState(isLogin ? "mark_me1" : "");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
   const [name, setName] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [gLoading, setGLoading] = useState(false);
-  const [ghLoading, setGhLoading] = useState(false);
 
   const submit = async e => {
     e.preventDefault();
     setError("");
     if (!email.includes("@")) { setError("Enter a valid email"); return; }
-    if (pass.length < 6) { setError("Password must be 6+ characters"); return; }
+    if (pass.length < 8) { setError("Password must be 8+ characters"); return; }
     if (!isLogin && !name.trim()) { setError("Name is required"); return; }
     setLoading(true);
     try {
-      // Demo credentials are Auth.js → Neon (authorizeWithDemoCredentials).
-      // Signup uses the same path for seeded demo accounts; arbitrary signup needs OAuth.
-      const res = await signIn("credentials", {
+      const credentials = {
         email: email.toLowerCase().trim(),
         password: pass,
-        redirect: false,
-      });
-      if (res?.error) {
-        setError(isLogin
-          ? "Invalid email or password. Try the demo accounts below, or Google / GitHub."
-          : "Account creation via password is limited to demo users. Use Google / GitHub, or sign in with a demo account.");
+      };
+      const { error: authError } = isLogin
+        ? await authClient.signIn.email(credentials)
+        : await authClient.signUp.email({ ...credentials, name: name.trim() });
+
+      if (authError) {
+        setError(authError.message || (isLogin ? "Invalid email or password." : "Could not create account."));
         return;
       }
+      // Provision public.users from Neon Auth session for bookmarks FKs
+      await fetch("/api/auth/sync-user", { method: "POST", credentials: "include" });
       onNavigate("dashboard");
-    } catch {
-      setError("Sign-in failed. Check that DATABASE_URL is set and the server is running.");
+    } catch (err) {
+      setError(err?.message || "Authentication failed. Check Neon Auth configuration.");
     } finally {
       setLoading(false);
     }
   };
 
-  const oauth = async (provider, setBusy) => {
+  const oauthGoogle = async () => {
     setError("");
-    setBusy(true);
+    setGLoading(true);
     try {
-      await signIn(provider, { callbackUrl: "/" });
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/",
+      });
     } catch {
-      setError(`${provider === "google" ? "Google" : "GitHub"} sign-in failed. Check OAuth env vars.`);
-      setBusy(false);
+      setError("Google sign-in failed. Check Neon Auth OAuth settings.");
+      setGLoading(false);
     }
   };
 
@@ -1105,24 +1077,6 @@ function AuthPage({ mode, onNavigate }) {
           </div>
 
           <form onSubmit={submit} aria-label={isLogin ? "Sign in form" : "Sign up form"}>
-            {isLogin && (
-              <div style={{ background:T.secondarySubtle, border:`1px solid ${T.secondary}30`, padding:"12px 14px", marginBottom:18 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:T.secondary, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
-                  <I.Zap /> Demo credentials (Neon)
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  {Object.entries(MOCK_USERS).map(([em,u])=>(
-                    <button type="button" key={em} onClick={()=>{setEmail(em);setPass(u.password);setError("")}}
-                      style={{ ...S.btn, padding:"8px 10px", background:T.bgInput, border:`1px solid ${T.border}`, justifyContent:"flex-start", textAlign:"left", flexDirection:"column", alignItems:"flex-start", gap:2 }}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor=T.secondary+"60"}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border}}>
-                      <span style={{ fontSize:11, fontWeight:700, color:T.text }}>{u.name}</span>
-                      <span style={{ fontSize:10, color:T.textMuted, fontFamily:"monospace" }}>{em}</span>
-                      <span style={{ fontSize:9, fontWeight:700, color:u.plan==="pro"?T.primary:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginTop:1 }}>{u.plan} plan</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             {!isLogin && (
               <Field label="Full Name" placeholder="Your name" icon={<I.User />} value={name} onChange={e=>setName(e.target.value)} />
             )}
@@ -1150,18 +1104,13 @@ function AuthPage({ mode, onNavigate }) {
           </div>
 
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            <button type="button" onClick={()=>oauth("google", setGLoading)} disabled={gLoading}
+            <button type="button" onClick={oauthGoogle} disabled={gLoading}
               style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:gLoading?T.textMuted:T.textSec, border:`1px solid ${T.border}`, fontSize:13, opacity:gLoading?0.7:1, transition:"all 0.2s" }}
               onMouseEnter={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}} onMouseLeave={e=>{if(!gLoading){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}}>
               {gLoading
                 ? <div style={{ width:16, height:16, border:`2px solid ${T.textMuted}`, borderTopColor:"transparent", borderRadius:"50%", animation:"mmSpin 0.5s linear infinite" }} />
                 : <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>}
               {gLoading ? "Connecting..." : "Continue with Google"}
-            </button>
-            <button type="button" onClick={()=>oauth("github", setGhLoading)} disabled={ghLoading}
-              style={{ ...S.btn, width:"100%", padding:"12px", background:T.bgInput, color:ghLoading?T.textMuted:T.textSec, border:`1px solid ${T.border}`, fontSize:13, opacity:ghLoading?0.7:1, transition:"all 0.2s" }}
-              onMouseEnter={e=>{if(!ghLoading){e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}}} onMouseLeave={e=>{if(!ghLoading){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}}>
-              {ghLoading ? "Connecting..." : "Continue with GitHub"}
             </button>
           </div>
 
@@ -1944,10 +1893,11 @@ function PricingPage({ onNavigate }) {
         </div>
 
         {/* Plans grid */}
-        <div className="mm-pricing-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:1, background:T.border, marginBottom:60 }}>
+        <div className="mm-pricing-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:1, background:T.border, marginBottom:60, alignItems:"stretch" }}>
           {plans.map((p,i)=>(
             <div key={p.id} style={{
               background:T.bg, padding:"36px 28px", position:"relative", overflow:"hidden",
+              display:"flex", flexDirection:"column", height:"100%",
               animation:`mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i*80}ms both`,
             }}>
               {p.popular && <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:p.color }} />}
@@ -1959,7 +1909,7 @@ function PricingPage({ onNavigate }) {
               </div>
               <div style={{ fontSize:11, color:T.textMuted, marginBottom:20, position:"relative" }}>{p.period}</div>
               <p style={{ fontSize:13, color:T.textSec, marginBottom:20, lineHeight:1.5, position:"relative" }}>{p.desc}</p>
-              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:24, position:"relative" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, flex:1, marginBottom:24, position:"relative" }}>
                 {p.features.map((f,fi)=>(
                   <div key={fi} style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:T.textSec }}>
                     <span style={{ color:p.color||T.success, display:"flex", flexShrink:0 }}><I.Check /></span> {f}
@@ -1968,6 +1918,7 @@ function PricingPage({ onNavigate }) {
               </div>
               <button onClick={p.action} style={{
                 ...S.btn, width:"100%", padding:"12px", fontSize:14, fontWeight:800, position:"relative",
+                marginTop:"auto", flexShrink:0,
                 background:p.popular?"#fff":p.color?p.color+"18":"transparent",
                 color:p.popular?T.bg:p.color||T.textSec,
                 border:p.popular?"none":`1px solid ${p.color?p.color+"40":T.border}`,
@@ -2037,7 +1988,7 @@ function NewTabPage({ onNavigate, categories }) {
         </button>
       </div>
       <div style={{ position:"absolute", top:16, right:20, zIndex:10 }}>
-        <span style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", background:T.primary+"20", color:T.primary, padding:"4px 10px", border:`1px solid ${T.primary}30`, fontFamily:T.font }}>
+        <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", background:T.primary+"20", color:T.primary, padding:"4px 10px", border:`1px solid ${T.primary}30`, fontFamily:T.font, whiteSpace:"nowrap" }}>
           <I.Chrome /> Extension Preview
         </span>
       </div>
@@ -2045,8 +1996,10 @@ function NewTabPage({ onNavigate, categories }) {
       <div style={{ maxWidth:800, margin:"0 auto", padding:"80px 20px 60px", textAlign:"center", position:"relative", zIndex:1 }}>
         {/* Clock */}
         <div style={{ animation:"mmSlideUp .5s ease both" }}>
-          <div style={{ fontSize:"clamp(4rem, 12vw, 7rem)", fontWeight:800, letterSpacing:"-0.06em", lineHeight:1, marginBottom:8, background:`linear-gradient(135deg, ${T.text}, ${T.textSec})`, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
-            {hours}<span style={{ opacity:0.4 }}>:</span>{mins}
+          <div style={{ fontSize:"clamp(4rem, 12vw, 7rem)", fontWeight:800, letterSpacing:"-0.06em", lineHeight:1, marginBottom:8, display:"inline-flex", alignItems:"baseline", justifyContent:"center" }}>
+            <span style={{ background:`linear-gradient(135deg, ${T.text}, ${T.textSec})`, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{hours}</span>
+            <span style={{ color:T.textMuted, opacity:0.7, margin:"0 0.02em" }}>:</span>
+            <span style={{ background:`linear-gradient(135deg, ${T.text}, ${T.textSec})`, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{mins}</span>
           </div>
           <p style={{ fontSize:15, color:T.textMuted, marginBottom:6 }}>{dateStr}</p>
           <p style={{ fontSize:17, color:T.textSec, fontWeight:600, marginBottom:32 }}>{greeting}</p>
@@ -2334,12 +2287,17 @@ function AiPanel({ open, onClose, categories }) {
    APP ROOT — ROUTER
    ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
-  const { data: session, status } = useSession();
+  const { data: session, isPending } = authClient.useSession();
   const [page, setPage] = useState("landing");
   const [user, setUser] = useState(null);
-  const isAuthed = status === "authenticated" && !!session?.user;
+  const neonUser = session?.user;
+  const isAuthed = !!neonUser?.id;
 
   const { data: categories = [] } = trpc.category.list.useQuery(undefined, {
+    enabled: isAuthed,
+    retry: 1,
+  });
+  const { data: profile } = trpc.user.me.useQuery(undefined, {
     enabled: isAuthed,
     retry: 1,
   });
@@ -2347,24 +2305,26 @@ export default function App() {
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [page]);
 
   useEffect(() => {
-    if (status === "loading") return;
-    if (session?.user) {
+    if (isPending) return;
+    if (neonUser) {
       setUser({
-        id: session.user.id,
-        name: session.user.name || session.user.email?.split("@")[0] || "User",
-        email: session.user.email || "",
-        avatar: session.user.image || null,
-        plan: session.user.plan || "free",
-        joinedAt: session.user.joinedAt || new Date().toISOString(),
+        id: neonUser.id,
+        name: profile?.name || neonUser.name || neonUser.email?.split("@")[0] || "User",
+        email: profile?.email || neonUser.email || "",
+        avatar: profile?.avatarUrl || neonUser.image || null,
+        plan: profile?.plan || "free",
+        joinedAt: profile?.createdAt
+          ? (profile.createdAt instanceof Date ? profile.createdAt.toISOString() : String(profile.createdAt))
+          : new Date().toISOString(),
       });
       setPage(p => (p === "landing" || p === "login" || p === "signup" ? "dashboard" : p));
-    } else if (status === "unauthenticated") {
+    } else {
       setUser(null);
     }
-  }, [session, status]);
+  }, [neonUser, profile, isPending]);
 
   const logout = async () => {
-    await signOut({ redirect: false });
+    await authClient.signOut();
     setUser(null);
     setPage("landing");
   };
@@ -2377,7 +2337,7 @@ export default function App() {
     tags: [...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))].length,
   };
 
-  if (status === "loading") {
+  if (isPending) {
     return (
       <div style={{ minHeight:"100vh", background:T.bg, color:T.textMuted, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:T.font, fontSize:14, fontWeight:600 }}>
         Loading…
@@ -2404,14 +2364,13 @@ export default function App() {
       <PageTransition pageKey={page}>
         {page === "landing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The landing page encountered an error."><LandingPage onNavigate={navigate} /></ErrorBoundary>}
         {page === "pricing" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The pricing page encountered an error."><PricingPage onNavigate={navigate} /></ErrorBoundary>}
-        {page === "newtab" && user && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The new tab page encountered an error."><NewTabPage onNavigate={navigate} categories={categories} /></ErrorBoundary>}
+        {page === "newtab" && <ErrorBoundary fallbackTitle="Page error" fallbackMessage="The new tab page encountered an error."><NewTabPage onNavigate={navigate} categories={categories} /></ErrorBoundary>}
         {page === "login" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The login form encountered an error."><AuthPage mode="login" onNavigate={navigate} /></ErrorBoundary>}
         {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} /></ErrorBoundary>}
         {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
         {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
-        {page === "dashboard" && !user && status === "unauthenticated" && (() => { setPage("login"); return null; })()}
-        {page === "profile" && !user && status === "unauthenticated" && (() => { setPage("login"); return null; })()}
-        {page === "newtab" && !user && status === "unauthenticated" && (() => { setPage("login"); return null; })()}
+        {page === "dashboard" && !user && !isPending && !neonUser && (() => { setPage("login"); return null; })()}
+        {page === "profile" && !user && !isPending && !neonUser && (() => { setPage("login"); return null; })()}
       </PageTransition>
     </>
   );

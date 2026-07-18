@@ -42,3 +42,4 @@ data
 apps/current/package-lock.json
 apps/current/dist/
 apps/current/node_modules/
+.neon

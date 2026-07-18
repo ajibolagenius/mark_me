@@ -2,11 +2,11 @@
  * GET /api/extension-token
  *
  * Returns a signed JWT for use by the Chrome extension.
- * Requires a valid NextAuth session (httpOnly cookie).
- * The token is separate from the NextAuth session and can be revoked
- * independently by rotating EXTENSION_TOKEN_SECRET.
+ * Requires a valid Neon Auth session (httpOnly cookie).
  */
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth/server";
+import { createAuthDb } from "@/lib/db";
+import { ensureAppUser } from "@/lib/ensure-app-user";
 import { SignJWT } from "jose";
 
 const TOKEN_TTL_DAYS = 30;
@@ -22,16 +22,31 @@ function getSecret(): Uint8Array {
 }
 
 export async function GET() {
-  const session = await auth();
+  const { data: session } = await auth.getSession();
+  const neonUser = session?.user;
 
-  if (!session?.user?.id) {
+  if (!neonUser?.id || !neonUser.email) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const db = createAuthDb();
+  if (!db) {
+    return new Response("Database not configured", { status: 503 });
+  }
+
+  const appUser = await ensureAppUser(db as never, {
+    id: neonUser.id,
+    email: neonUser.email,
+    name: neonUser.name,
+    image: neonUser.image,
+    emailVerified: neonUser.emailVerified,
+  });
+
   const secret = getSecret();
   const expiresAt = Date.now() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
+  const userId = String((appUser as { id: string }).id);
 
-  const token = await new SignJWT({ userId: session.user.id, type: "extension" })
+  const token = await new SignJWT({ userId, type: "extension" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${TOKEN_TTL_DAYS}d`)
@@ -39,7 +54,7 @@ export async function GET() {
 
   return Response.json({
     token,
-    userId: session.user.id,
+    userId,
     expiresAt,
   });
 }

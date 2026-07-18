@@ -1,7 +1,7 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
-/** Auth.js / NextAuth database session rows (table name `session`). */
+/** Legacy Auth.js session table (unused by Neon Auth; kept for existing DBs). */
 export const sessions = pgTable("session", {
   sessionToken: text("session_token").primaryKey(),
   userId: text("user_id")

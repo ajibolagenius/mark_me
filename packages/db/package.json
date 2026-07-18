@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
+    "./schema/neon-auth": "./src/schema/neon-auth.ts",
     "./client": "./src/client.ts",
     "./seed": "./src/seed.ts",
     "./postgres-options": "./src/postgres-connection-options.ts"

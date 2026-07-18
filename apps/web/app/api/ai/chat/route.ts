@@ -1,6 +1,7 @@
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth/server";
 import { createAuthDb } from "@/lib/db";
-import { buildBookmarkContextText, consumeAiQuota } from "@markme/api";
+import { ensureAppUser } from "@/lib/ensure-app-user";
+import { buildBookmarkContextText, consumeAiQuota, type AppDb } from "@markme/api";
 import { createBookmarkAssistantStream, isAnthropicConfigured } from "@markme/ai";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -10,22 +11,31 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) {
+  const { data: session } = await auth.getSession();
+  const neonUser = session?.user;
+  if (!neonUser?.id || !neonUser.email) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  const db = createAuthDb();
+  const db = createAuthDb() as AppDb | undefined;
   if (!db) {
     return new Response(JSON.stringify({ error: "Database not configured" }), {
       status: 503,
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  const appUser = await ensureAppUser(db as never, {
+    id: neonUser.id,
+    email: neonUser.email,
+    name: neonUser.name,
+    image: neonUser.image,
+    emailVerified: neonUser.emailVerified,
+  });
+  const userId = String((appUser as { id: string }).id);
 
   let json: unknown;
   try {
