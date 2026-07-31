@@ -14,6 +14,7 @@ import {
   Loader2,
   LogOut,
   Plus,
+  Sparkles,
   WifiOff,
   X,
 } from "lucide-react";
@@ -138,15 +139,25 @@ function TagInput({
 
 function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
   const webAppUrl = getWebAppUrl();
+  const utils = trpcReact.useUtils();
   const { data: categories = [], isLoading: loadingCats } = trpcReact.category.list.useQuery();
   const createBookmark = trpcReact.bookmark.create.useMutation();
+  const createCategory = trpcReact.category.create.useMutation({
+    onSuccess: () => utils.category.list.invalidate(),
+  });
+  const autoTag = trpcReact.ai.autoTag.useMutation();
 
+  const [title, setTitle] = useState(tabInfo.title);
   const [categoryId, setCategoryId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "offline" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [showCatDrop, setShowCatDrop] = useState(false);
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [creatingCat, setCreatingCat] = useState(false);
+  const [tagging, setTagging] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
 
   useEffect(() => {
@@ -164,21 +175,81 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
 
   const selectedCat = categories.find((c) => c.id === categoryId);
 
+  async function handleCreateCategory() {
+    const name = newCatName.trim();
+    if (!name || creatingCat) return;
+    setCreatingCat(true);
+    setErrorMsg("");
+    try {
+      const cat = await createCategory.mutateAsync({
+        name,
+        emoji: "📁",
+        color: 0,
+        tags: [],
+      });
+      setCategoryId(cat.id);
+      await setPrefs({ lastCategoryId: cat.id });
+      setNewCatName("");
+      setShowNewCat(false);
+      setShowCatDrop(false);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Could not create category");
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 2500);
+    } finally {
+      setCreatingCat(false);
+    }
+  }
+
+  async function handleAutoTag() {
+    if (tagging) return;
+    setTagging(true);
+    try {
+      const result = await autoTag.mutateAsync({ title: title.trim() || tabInfo.title, url: tabInfo.url });
+      const next = [...new Set([...tags, ...(result.tags ?? [])])].slice(0, 12);
+      setTags(next);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Auto-tag failed");
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 2500);
+    } finally {
+      setTagging(false);
+    }
+  }
+
   async function handleSave() {
     if (!categoryId) return;
+    const trimmedTitle = title.trim() || tabInfo.title || getDomain(tabInfo.url) || "Untitled";
     setStatus("saving");
     setErrorMsg("");
 
-    try {
-      await createBookmark.mutateAsync({
+    const payload = {
+      categoryId,
+      url: tabInfo.url,
+      title: trimmedTitle,
+      tags,
+      note: notes,
+      pinned: false,
+      faviconUrl: safeHttpUrl(tabInfo.favIconUrl),
+    };
+
+    if (!navigator.onLine) {
+      await enqueueOffline({
+        id: crypto.randomUUID(),
+        url: payload.url,
+        title: payload.title,
         categoryId,
-        url: tabInfo.url,
-        title: tabInfo.title,
         tags,
-        note: notes,
-        pinned: false,
-        faviconUrl: safeHttpUrl(tabInfo.favIconUrl),
+        notes,
+        savedAt: Date.now(),
       });
+      setStatus("offline");
+      setTimeout(() => window.close(), 1500);
+      return;
+    }
+
+    try {
+      await createBookmark.mutateAsync(payload);
       await setPrefs({ lastCategoryId: categoryId });
       setStatus("saved");
       setTimeout(() => window.close(), 1200);
@@ -188,8 +259,8 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
       if (isOffline) {
         await enqueueOffline({
           id: crypto.randomUUID(),
-          url: tabInfo.url,
-          title: tabInfo.title,
+          url: payload.url,
+          title: payload.title,
           categoryId,
           tags,
           notes,
@@ -243,43 +314,6 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
     );
   }
 
-  if (!loadingCats && categories.length === 0) {
-    return (
-      <div className="flex w-[300px] flex-col bg-mm-bg">
-        <div className="flex items-center justify-between border-b border-mm-border px-3 py-2.5">
-          <Logo size={22} />
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-1 text-[10px] text-mm-text-muted transition-colors hover:text-mm-error"
-            aria-label="Disconnect account"
-          >
-            <LogOut size={11} />
-          </button>
-        </div>
-        <div className="flex flex-col items-center gap-3 px-5 py-8 text-center">
-          <div className="flex h-10 w-10 items-center justify-center border border-mm-primary/20 bg-mm-primary-subtle text-mm-primary">
-            <FolderPlus size={20} />
-          </div>
-          <p className="text-[14px] font-bold text-mm-text">No categories yet</p>
-          <p className="text-[12px] leading-relaxed text-mm-text-muted">
-            Create a category in the web app, then come back to save.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              chrome.tabs.create({ url: `${webAppUrl}/dashboard` });
-              window.close();
-            }}
-            className="mt-1 w-full bg-mm-primary px-4 py-2.5 text-[13px] font-bold text-mm-on-primary shadow-[2px_2px_0_rgba(0,0,0,0.4)]"
-          >
-            Open dashboard →
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex w-[300px] flex-col bg-mm-bg">
       <div className="flex items-center justify-between border-b border-mm-border px-3 py-2.5">
@@ -295,9 +329,14 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
       </div>
 
       <div className="flex items-center gap-2.5 border-b border-mm-border px-3 py-2.5">
-        <FaviconWithFallback url={tabInfo.url} title={tabInfo.title} size={18} />
+        <FaviconWithFallback url={tabInfo.url} title={title} size={18} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-semibold text-mm-text">{tabInfo.title}</p>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            aria-label="Bookmark title"
+            className="w-full truncate border-none bg-transparent text-[12px] font-semibold text-mm-text outline-none"
+          />
           <p className="truncate text-[10px] text-mm-text-muted">{getDomain(tabInfo.url)}</p>
         </div>
         <a
@@ -313,13 +352,51 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
 
       <div className="flex flex-col gap-2.5 px-3 py-3">
         <div className="relative">
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
-            Category
-          </p>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
+              Category
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowNewCat((v) => !v);
+                setShowCatDrop(false);
+              }}
+              className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[10px] font-semibold text-mm-primary"
+            >
+              <FolderPlus size={11} /> New
+            </button>
+          </div>
+
+          {showNewCat && (
+            <div className="mb-2 flex gap-1.5">
+              <input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleCreateCategory();
+                  }
+                }}
+                placeholder="Category name"
+                className="min-w-0 flex-1 border border-mm-border bg-mm-bg-input px-2 py-1.5 text-[12px] text-mm-text outline-none focus:border-mm-primary/50"
+              />
+              <button
+                type="button"
+                onClick={() => void handleCreateCategory()}
+                disabled={!newCatName.trim() || creatingCat}
+                className="shrink-0 bg-mm-primary px-2.5 py-1.5 text-[11px] font-bold text-mm-on-primary disabled:opacity-50"
+              >
+                {creatingCat ? <Loader2 size={12} className="animate-spin" /> : "Add"}
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setShowCatDrop((v) => !v)}
-            disabled={loadingCats}
+            disabled={loadingCats || categories.length === 0}
             className="flex w-full items-center justify-between border border-mm-border bg-mm-bg-el px-2.5 py-2 text-[12px] text-mm-text transition-colors hover:border-mm-primary/40 disabled:opacity-50"
           >
             <span className="flex items-center gap-1.5">
@@ -331,7 +408,7 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
               ) : loadingCats ? (
                 <span className="text-mm-text-muted">Loading…</span>
               ) : (
-                <span className="text-mm-text-muted">Select category</span>
+                <span className="text-mm-text-muted">Create a category first</span>
               )}
             </span>
             <ChevronDown
@@ -375,9 +452,21 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         </div>
 
         <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
-            Tags
-          </p>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-mm-text-muted">
+              Tags
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleAutoTag()}
+              disabled={tagging || !navigator.onLine}
+              className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[10px] font-semibold text-mm-primary disabled:opacity-40"
+              title={!navigator.onLine ? "Auto-tag needs a connection" : "Suggest tags with AI"}
+            >
+              {tagging ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+              Suggest
+            </button>
+          </div>
           <TagInput
             tags={tags}
             onAdd={(t) => setTags((prev) => [...prev, t])}
@@ -403,6 +492,22 @@ function SaveForm({ tabInfo }: { tabInfo: TabInfo }) {
         {status === "error" && (
           <p className="mb-2 text-center text-[11px] text-mm-error">
             {errorMsg || "Save failed. Please try again."}
+          </p>
+        )}
+        {!loadingCats && categories.length === 0 && (
+          <p className="mb-2 text-center text-[11px] text-mm-text-muted">
+            Create a category above, or{" "}
+            <button
+              type="button"
+              onClick={() => {
+                chrome.tabs.create({ url: `${webAppUrl}/dashboard` });
+                window.close();
+              }}
+              className="cursor-pointer border-none bg-transparent p-0 font-semibold text-mm-primary underline"
+            >
+              open the dashboard
+            </button>
+            .
           </p>
         )}
         <button

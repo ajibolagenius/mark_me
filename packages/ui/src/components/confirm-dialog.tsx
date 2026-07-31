@@ -14,12 +14,14 @@ interface ConfirmDialogProps {
   message?: ReactNode;
   itemName?: string;
   count?: number;
+  confirmLabel?: string;
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count, confirmLabel }: ConfirmDialogProps) {
   const trapRef = useFocusTrap(open);
   const titleId = useRef(`confirm-${Math.random().toString(36).slice(2, 6)}`).current;
   const isMobile = useIsMobile();
+  const actionLabel = confirmLabel || "Delete";
 
   useEffect(() => {
     if (!open) return;
@@ -72,10 +74,10 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, itemNa
           <button
             type="button"
             onClick={onConfirm}
-            aria-label={`Confirm delete ${itemName || ""}`}
+            aria-label={`Confirm ${actionLabel}${itemName ? ` ${itemName}` : ""}`}
             className="cursor-pointer border-none bg-mm-error px-[18px] py-[9px] font-sans text-[13px] font-extrabold text-white shadow-[2px_2px_0_rgba(0,0,0,0.3)] hover:-translate-y-px hover:shadow-[4px_4px_0_rgba(0,0,0,0.4)]"
           >
-            Delete
+            {actionLabel}
           </button>
         </div>
       </div>

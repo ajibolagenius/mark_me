@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { httpUrlSchema } from "../lib/url";
 
 const bookmarkShape = z.object({
   id: z.string().min(1),
-  title: z.string(),
-  url: z.string(),
+  title: z.string().min(1).max(500),
+  url: httpUrlSchema,
   tags: z.array(z.string()).default([]),
   note: z.string().optional(),
   pinned: z.boolean().optional(),
@@ -12,7 +13,7 @@ const bookmarkShape = z.object({
 
 const categoryShape = z.object({
   id: z.string().min(1),
-  name: z.string(),
+  name: z.string().min(1).max(200),
   color: z.number(),
   icon: z.string(),
   tags: z.array(z.string()).default([]),
@@ -21,6 +22,7 @@ const categoryShape = z.object({
 
 export const importJsonSchema = z.object({
   categories: z.array(categoryShape).min(0).max(500),
+  mode: z.enum(["replace", "merge"]).default("replace"),
 });
 
 export type ImportCategoryInput = z.infer<typeof categoryShape>;

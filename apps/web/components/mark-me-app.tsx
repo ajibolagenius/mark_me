@@ -1,20 +1,19 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  T, TAG_COLORS, ACCENTS,
+  T, ACCENTS,
   Logo, Atmosphere,
-  uid, getDomain, getFavicon, tagColor, timeAgo,
+  uid, getDomain, timeAgo,
   Modal, ConfirmDialog, VirtualMasonry, SwipeRow, PullToRefresh, SkipLink,
   ErrorBoundary, FaviconWithFallback, LinkPreview, Tag, Field, Highlight,
   AnimCount, AnimatedCollapse, PageTransition, MobileNavOverlay,
-  useUndoToast, useIsMobile, useDebounce, useFocusTrap, useStagger,
+  useUndoToast, useIsMobile, useDebounce, useFocusTrap,
 } from "@markme/ui";
 import { authClient } from "@/lib/auth/client";
 import {
   clearLastUser,
   createOutboxId,
   discardAllFailed,
-  discardOutboxEntry,
   flushOutbox,
   getLastUser,
   notifyOutboxChanged,
@@ -957,8 +956,8 @@ function Dashboard({ user, onNavigate, onLogout }) {
     else if (sortBy === "most") result = [...result].sort((a,b) => b.bookmarks.length - a.bookmarks.length);
     else if (sortBy === "least") result = [...result].sort((a,b) => a.bookmarks.length - b.bookmarks.length);
     else if (sortBy === "newest") result = [...result].sort((a,b) => {
-      const ta = Math.max(0, ...a.bookmarks.map(bm => bm.addedAt || 0));
-      const tb = Math.max(0, ...b.bookmarks.map(bm => bm.addedAt || 0));
+      const ta = a.bookmarks.reduce((m, bm) => Math.max(m, bm.addedAt || 0), 0);
+      const tb = b.bookmarks.reduce((m, bm) => Math.max(m, bm.addedAt || 0), 0);
       return tb - ta;
     });
     return result;
@@ -1395,7 +1394,7 @@ function Dashboard({ user, onNavigate, onLogout }) {
         </div>
 
         <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The bookmark grid encountered an error. Try refreshing.">
-        <VirtualMasonry items={filtered} columnCount={3} gap={14}
+        <VirtualMasonry items={filtered} columnCount={3} gap={14} className="mm-grid"
           renderItem={(cat, i) => (
             <CatCard cat={cat} allTags={allTags} searchQuery={debouncedSearch}
               onTogglePin={togglePin}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { httpUrlSchema } from "../lib/url";
 
 export const bookmarkIdSchema = z.string().min(1);
 
@@ -9,7 +10,7 @@ export const listBookmarksSchema = z.object({
 export const createBookmarkSchema = z.object({
   categoryId: z.string().min(1),
   title: z.string().min(1).max(500),
-  url: z.string().min(1).max(2048),
+  url: httpUrlSchema,
   note: z.string().max(2000).optional(),
   tags: z.array(z.string().min(1).max(50)).default([]),
   pinned: z.boolean().optional(),
@@ -19,7 +20,7 @@ export const createBookmarkSchema = z.object({
 export const updateBookmarkSchema = z.object({
   id: bookmarkIdSchema,
   title: z.string().min(1).max(500).optional(),
-  url: z.string().min(1).max(2048).optional(),
+  url: httpUrlSchema.optional(),
   note: z.string().max(2000).optional().nullable(),
   tags: z.array(z.string().min(1).max(50)).optional(),
   pinned: z.boolean().optional(),

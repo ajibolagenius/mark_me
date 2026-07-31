@@ -23,6 +23,15 @@ import { safeHttpUrl } from "../lib/urls";
 
 const CONTEXT_MENU_ID = "markme-save";
 const CONTEXT_MENU_LINK_ID = "markme-save-link";
+const CONTEXT_MENU_POPUP_ID = "markme-save-popup";
+
+const TERMINAL_CODES = new Set([
+    "BAD_REQUEST",
+    "NOT_FOUND",
+    "UNAUTHORIZED",
+    "FORBIDDEN",
+    "CONFLICT",
+]);
 
 function getWebAppUrl(): string {
     return (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
@@ -41,6 +50,15 @@ function notify(title: string, message: string) {
         title,
         message,
     });
+}
+
+function isTerminalError(err: unknown): boolean {
+    if (err && typeof err === "object") {
+        const e = err as { data?: { code?: string }; message?: string };
+        if (e.data?.code && TERMINAL_CODES.has(e.data.code)) return true;
+        if (e.message && /invalid|validation|expected/i.test(e.message)) return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +91,11 @@ function setupContextMenus() {
             title: "Save link to mark_me",
             contexts: ["link"],
         });
+        chrome.contextMenus.create({
+            id: CONTEXT_MENU_POPUP_ID,
+            title: "Save with options…",
+            contexts: ["page", "link"],
+        });
     });
 }
 
@@ -81,6 +104,16 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!auth) {
         notify("mark_me", "Connect your account to save bookmarks.");
         openConnectTab();
+        return;
+    }
+
+    if (info.menuItemId === CONTEXT_MENU_POPUP_ID) {
+        // Open the extension popup for full save form (title/tags/category)
+        try {
+            await chrome.action.openPopup();
+        } catch {
+            notify("mark_me", "Click the mark_me icon to save with options.");
+        }
         return;
     }
 
@@ -100,9 +133,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // ---------------------------------------------------------------------------
 // Auth: receive token from the web app.
-// Chrome: directly via externally_connectable (onMessageExternal).
-// Firefox has no externally_connectable, so the auth-bridge content script on
-// /extension-auth relays the token as an internal message (onMessage).
 // ---------------------------------------------------------------------------
 
 function handleAuthMessage(message: unknown, sendResponse: (r: unknown) => void): boolean {
@@ -138,7 +168,6 @@ if (chrome.runtime.onMessageExternal) {
 
 chrome.runtime.onMessage.addListener(
     (message: unknown, sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
-        // Only trust our own pages / content scripts
         if (sender.id !== chrome.runtime.id) return;
         return handleAuthMessage(message, sendResponse) || undefined;
     },
@@ -158,7 +187,7 @@ async function drainOfflineQueue() {
     const client = createVanillaClient(auth.token);
 
     for (const item of queue) {
-        if (!item.categoryId) {
+        if (!item.categoryId || !safeHttpUrl(item.url)) {
             await dequeueOffline(item.id);
             continue;
         }
@@ -173,7 +202,12 @@ async function drainOfflineQueue() {
                 faviconUrl: null,
             });
             await dequeueOffline(item.id);
-        } catch {
+        } catch (err) {
+            if (isTerminalError(err)) {
+                // Drop permanently failed items so the rest can sync
+                await dequeueOffline(item.id);
+                continue;
+            }
             break;
         }
     }
@@ -187,6 +221,11 @@ if (chrome.alarms) {
         }
     });
 }
+
+// Drain when connectivity returns (ServiceWorkerGlobalScope)
+self.addEventListener("online", () => {
+    void drainOfflineQueue();
+});
 
 // ---------------------------------------------------------------------------
 // Helper: save a bookmark via the API (or enqueue offline)
@@ -204,6 +243,7 @@ async function saveBookmark({
     const client = createVanillaClient(auth.token);
     const prefs = await getPrefs();
     let categoryId = prefs.lastCategoryId;
+    let tags: string[] = [];
 
     try {
         const cats = await client.category.list.query();
@@ -218,17 +258,25 @@ async function saveBookmark({
             return;
         }
 
+        try {
+            const tagged = await client.ai.autoTag.mutate({ title, url });
+            tags = tagged.tags ?? [];
+        } catch {
+            // auto-tag is best-effort for context-menu saves
+        }
+
         await client.bookmark.create.mutate({
             categoryId,
             url,
             title,
-            tags: [],
+            tags,
             note: "",
             pinned: false,
             faviconUrl: null,
         });
         await setPrefs({ lastCategoryId: categoryId });
-        notify("mark_me", `"${title.slice(0, 60)}" saved.`);
+        const tagNote = tags.length ? ` · ${tags.slice(0, 3).join(", ")}` : "";
+        notify("mark_me", `"${title.slice(0, 50)}" saved${tagNote}`);
     } catch {
         if (!categoryId) {
             notify("mark_me", "Couldn’t save — connect online once to load categories.");
@@ -239,7 +287,7 @@ async function saveBookmark({
             url,
             title,
             categoryId,
-            tags: [],
+            tags,
             notes: "",
             savedAt: Date.now(),
         });

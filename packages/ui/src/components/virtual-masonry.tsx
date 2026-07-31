@@ -7,6 +7,7 @@ interface VirtualMasonryProps<T extends { id?: string }> {
   renderItem: (item: T, index: number) => ReactNode;
   columnCount?: number;
   gap?: number;
+  className?: string;
 }
 
 function seedVisible<T extends { id?: string }>(items: T[], columnCount: number) {
@@ -21,6 +22,7 @@ export function VirtualMasonry<T extends { id?: string }>({
   renderItem,
   columnCount = 3,
   gap = 14,
+  className,
 }: VirtualMasonryProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleSet, setVisibleSet] = useState<Set<string>>(() => seedVisible(items, columnCount));
@@ -79,7 +81,7 @@ export function VirtualMasonry<T extends { id?: string }>({
   }, []);
 
   return (
-    <div ref={containerRef} style={{ columnCount, columnGap: gap }}>
+    <div ref={containerRef} className={className} style={{ columnCount, columnGap: gap }}>
       {items.map((item, i) => {
         const id = item.id || `vi-${i}`;
         const isVisible = visibleSet.has(id);

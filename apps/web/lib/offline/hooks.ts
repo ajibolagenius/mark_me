@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getOutbox } from "./storage";
 import { isOffline } from "./outbox";
+import type { OutboxEntry } from "./types";
 
 export function useOnlineStatus(): boolean {
   const [online, setOnline] = useState(() =>
@@ -24,12 +25,11 @@ export function useOnlineStatus(): boolean {
   return online;
 }
 
-export function useOutboxCount(): number {
-  const [count, setCount] = useState(0);
+export function useOutboxEntries(): OutboxEntry[] {
+  const [entries, setEntries] = useState<OutboxEntry[]>([]);
 
   const refresh = useCallback(async () => {
-    const entries = await getOutbox();
-    setCount(entries.length);
+    setEntries(await getOutbox());
   }, []);
 
   useEffect(() => {
@@ -45,7 +45,15 @@ export function useOutboxCount(): number {
     };
   }, [refresh]);
 
-  return count;
+  return entries;
+}
+
+export function useOutboxCount(): number {
+  return useOutboxEntries().length;
+}
+
+export function useOutboxFailedCount(): number {
+  return useOutboxEntries().filter((e) => e.status === "failed").length;
 }
 
 export function notifyOutboxChanged(): void {

@@ -1,6 +1,6 @@
 import { bookmarks } from "@markme/db/schema";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
 import { z } from "zod";
 import { mapBookmark } from "../lib/mappers";
@@ -45,7 +45,7 @@ export const bookmarkRouter = router({
         categoryId: input.categoryId,
         userId: ctx.session.userId,
         title: input.title,
-        url: input.url.startsWith("http") ? input.url : `https://${input.url}`,
+        url: input.url,
         note: input.note ?? null,
         tags: input.tags,
         pinned: input.pinned ?? false,
@@ -67,14 +67,9 @@ export const bookmarkRouter = router({
       await requireCategoryForUser(ctx.db, ctx.session.userId, input.categoryId);
     }
 
-    let url = input.url;
-    if (url && !url.startsWith("http")) {
-      url = `https://${url}`;
-    }
-
     const patch: Partial<InferInsertModel<typeof bookmarks>> = {};
     if (input.title !== undefined) patch.title = input.title;
-    if (url !== undefined) patch.url = url;
+    if (input.url !== undefined) patch.url = input.url;
     if (input.note !== undefined) patch.note = input.note;
     if (input.tags !== undefined) patch.tags = input.tags;
     if (input.pinned !== undefined) patch.pinned = input.pinned;
@@ -136,7 +131,12 @@ export const bookmarkRouter = router({
       .where(
         and(
           eq(bookmarks.userId, ctx.session.userId),
-          or(ilike(bookmarks.title, q), ilike(bookmarks.url, q), ilike(bookmarks.note, q)),
+          or(
+            ilike(bookmarks.title, q),
+            ilike(bookmarks.url, q),
+            ilike(bookmarks.note, q),
+            sql`array_to_string(${bookmarks.tags}, ' ') ilike ${q}`,
+          ),
         ),
       )
       .limit(input.limit);
