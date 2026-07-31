@@ -373,10 +373,11 @@ function useUndoToast() {
 }
 
 /* ── Confirm Dialog ── */
-function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count }) {
+function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count, confirmLabel }) {
   const trapRef = useFocusTrap(open);
   const titleId = useRef(`confirm-${Math.random().toString(36).slice(2,6)}`).current;
   const isMobile = useIsMobile();
+  const actionLabel = confirmLabel || "Delete";
 
   useEffect(() => {
     if (!open) return;
@@ -403,8 +404,8 @@ function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, cou
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
           <button onClick={onClose} aria-label="Cancel" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"9px 18px", border:`1px solid ${T.border}`, fontSize:13 }}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}>Cancel</button>
-          <button onClick={onConfirm} aria-label={`Confirm delete ${itemName || ""}`} style={{ ...S.btn, background:T.error, color:"#fff", padding:"9px 18px", fontSize:13, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}>Delete</button>
+          <button onClick={onConfirm} aria-label={`Confirm ${actionLabel}${itemName ? ` ${itemName}` : ""}`} style={{ ...S.btn, background:T.error, color:"#fff", padding:"9px 18px", fontSize:13, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}>{actionLabel}</button>
         </div>
       </div>
       {isMobile && <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)" }} />}
@@ -664,14 +665,33 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ── Virtual Masonry Grid ── */
+function seedMasonryVisible(items, columnCount) {
+  const seed = new Set();
+  const n = Math.min(items.length, Math.max(columnCount * 3, 6));
+  for (let i = 0; i < n; i++) seed.add(items[i].id || `vi-${i}`);
+  return seed;
+}
+
 function VirtualMasonry({ items, renderItem, columnCount = 3, gap = 14 }) {
   const containerRef = useRef(null);
-  const [visibleSet, setVisibleSet] = useState(new Set());
+  const [visibleSet, setVisibleSet] = useState(() => seedMasonryVisible(items, columnCount));
   const observerRef = useRef(null);
   const sentinelRefs = useRef({});
+  const seedRef = useRef(seedMasonryVisible(items, columnCount));
 
   // Estimated heights for placeholder sizing
   const heightCache = useRef({});
+
+  // Seed above-the-fold cards so first paint isn't blank placeholders
+  useEffect(() => {
+    const seeded = seedMasonryVisible(items, columnCount);
+    seedRef.current = seeded;
+    setVisibleSet(prev => {
+      const next = new Set(prev);
+      for (const id of seeded) next.add(id);
+      return next;
+    });
+  }, [items, columnCount]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -682,7 +702,7 @@ function VirtualMasonry({ items, renderItem, columnCount = 3, gap = 14 }) {
           entries.forEach(e => {
             const id = e.target.dataset.vid;
             if (e.isIntersecting) next.add(id);
-            else next.delete(id);
+            else if (!seedRef.current.has(id)) next.delete(id);
           });
           return next;
         });
@@ -1686,9 +1706,10 @@ function Dashboard({ user, onNavigate, onLogout }) {
   const [showNewCat,setShowNewCat]=useState(false); const [editCat,setEditCat]=useState(null);
   const [mobileNav,setMobileNav]=useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [confirmImport, setConfirmImport] = useState(null);
   const [sortBy, setSortBy] = useState("default");
   const [showAi, setShowAi] = useState(false);
-  const fileRef=useRef(null); const { flash, ToastEl } = useUndoToast();
+  const fileRef=useRef(null); const { flash, flashUndo, ToastEl } = useUndoToast();
   const isSearching = searchInput !== debouncedSearch;
 
   useEffect(() => {
@@ -1710,9 +1731,19 @@ function Dashboard({ user, onNavigate, onLogout }) {
 
   const allTags = useMemo(()=>[...new Set(categories.flatMap(c=>[...(c.tags||[]),...c.bookmarks.flatMap(b=>b.tags||[])]))],[categories]);
   const filtered = useMemo(()=>{
-    const q = debouncedSearch;
+    const q = debouncedSearch.trim().toLowerCase();
     let result = categories.map(cat=>{
-      const bms=cat.bookmarks.filter(bm=>{const ms=!q||bm.title.toLowerCase().includes(q.toLowerCase())||bm.url.toLowerCase().includes(q.toLowerCase())||bm.note?.toLowerCase().includes(q.toLowerCase());const mt=!filterTag||bm.tags?.includes(filterTag)||cat.tags?.includes(filterTag);return ms&&mt});
+      const bms = cat.bookmarks.filter(bm => {
+        const ms = !q
+          || bm.title.toLowerCase().includes(q)
+          || bm.url.toLowerCase().includes(q)
+          || bm.note?.toLowerCase().includes(q)
+          || cat.name?.toLowerCase().includes(q)
+          || bm.tags?.some(t => t.toLowerCase().includes(q))
+          || cat.tags?.some(t => t.toLowerCase().includes(q));
+        const mt = !filterTag || bm.tags?.includes(filterTag) || cat.tags?.includes(filterTag);
+        return ms && mt;
+      });
       return {...cat,bookmarks:bms};
     }).filter(cat=>(filterTag&&cat.tags?.includes(filterTag))||cat.bookmarks.length>0||(!q&&!filterTag));
     if (sortBy === "az") result = [...result].sort((a,b) => a.name.localeCompare(b.name));
@@ -1777,7 +1808,7 @@ function Dashboard({ user, onNavigate, onLogout }) {
     const file = e.target.files?.[0];
     if (!file) return;
     const r = new FileReader();
-    r.onload = async ev => {
+    r.onload = ev => {
       try {
         const d = JSON.parse(ev.target.result);
         const categoriesPayload = Array.isArray(d) ? d : d?.categories;
@@ -1785,14 +1816,30 @@ function Dashboard({ user, onNavigate, onLogout }) {
           flash("Invalid file");
           return;
         }
-        await importJson.mutateAsync({ categories: categoriesPayload });
-        flash("Imported ✓");
+        const bmCount = categoriesPayload.reduce((n, c) => n + (Array.isArray(c?.bookmarks) ? c.bookmarks.length : 0), 0);
+        setConfirmImport({
+          categories: categoriesPayload,
+          catCount: categoriesPayload.length,
+          bmCount,
+        });
       } catch (err) {
         flash(err?.message || "Invalid file");
       }
     };
     r.readAsText(file);
     e.target.value = "";
+  };
+
+  const confirmImportReplace = async () => {
+    const payload = confirmImport?.categories;
+    setConfirmImport(null);
+    if (!payload) return;
+    try {
+      await importJson.mutateAsync({ categories: payload });
+      flash("Imported ✓");
+    } catch (err) {
+      flash(err?.message || "Import failed");
+    }
   };
 
   const requestDeleteCat = cat => setConfirmDel({ cat });
@@ -1805,17 +1852,6 @@ function Dashboard({ user, onNavigate, onLogout }) {
       const offline = await queueAndPatch(utils.category.list, "category.delete", input);
       if (!offline.queued) await deleteCatMut.mutateAsync(input);
       flash(offline.queued ? `"${cat.name}" deleted (pending sync)` : `"${cat.name}" deleted`);
-    } catch (err) {
-      flash(err?.message || "Delete failed");
-    }
-  };
-
-  const deleteBm = async (catId, bmId, bmTitle) => {
-    try {
-      const input = { id: bmId };
-      const offline = await queueAndPatch(utils.category.list, "bookmark.delete", input);
-      if (!offline.queued) await deleteBmMut.mutateAsync(input);
-      flash(offline.queued ? `"${bmTitle}" removed (pending sync)` : `"${bmTitle}" removed`);
     } catch (err) {
       flash(err?.message || "Delete failed");
     }
@@ -1851,6 +1887,42 @@ function Dashboard({ user, onNavigate, onLogout }) {
       }
     } catch (err) {
       flash(err?.message || "Could not save bookmark");
+    }
+  };
+
+  const deleteBm = async (catId, bmId, bmTitle) => {
+    const snapshot = categories
+      .find(c => c.id === catId)
+      ?.bookmarks.find(b => b.id === bmId);
+    const label = bmTitle || snapshot?.title || "bookmark";
+    try {
+      const input = { id: bmId };
+      const offline = await queueAndPatch(utils.category.list, "bookmark.delete", input);
+      if (!offline.queued) await deleteBmMut.mutateAsync(input);
+      flashUndo(
+        offline.queued ? `"${label}" removed (pending sync)` : `"${label}" removed`,
+        async () => {
+          if (!snapshot) return;
+          try {
+            const clientId = createOutboxId();
+            const restore = {
+              categoryId: catId,
+              title: snapshot.title,
+              url: snapshot.url,
+              note: snapshot.note || undefined,
+              tags: snapshot.tags || [],
+              pinned: snapshot.pinned || false,
+            };
+            const queued = await queueAndPatch(utils.category.list, "bookmark.create", restore, { clientId });
+            if (!queued.queued) await createBm.mutateAsync(restore);
+            flash(queued.queued ? "Restored (pending sync)" : "Restored ✓");
+          } catch {
+            flash("Could not undo delete");
+          }
+        },
+      );
+    } catch (err) {
+      flash(err?.message || "Delete failed");
     }
   };
 
@@ -2022,6 +2094,20 @@ function Dashboard({ user, onNavigate, onLogout }) {
         title={`Delete "${confirmDel?.cat?.name}"?`}
         itemName={confirmDel?.cat?.name}
         count={confirmDel?.cat?.bookmarks?.length || 0}
+      />
+      <ConfirmDialog
+        open={!!confirmImport}
+        onClose={()=>setConfirmImport(null)}
+        onConfirm={confirmImportReplace}
+        title="Replace all bookmarks?"
+        message={
+          <>
+            Importing will permanently replace your current library with{" "}
+            <strong style={{ color: T.text }}>{confirmImport?.catCount ?? 0} categor{(confirmImport?.catCount ?? 0) === 1 ? "y" : "ies"}</strong>
+            {" "}({confirmImport?.bmCount ?? 0} bookmark{(confirmImport?.bmCount ?? 0) === 1 ? "" : "s"}). This cannot be undone.
+          </>
+        }
+        confirmLabel="Replace all"
       />
       <AiPanel open={showAi} onClose={()=>setShowAi(false)} categories={categories} />
       {ToastEl}

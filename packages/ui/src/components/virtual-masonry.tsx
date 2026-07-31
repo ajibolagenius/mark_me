@@ -9,6 +9,13 @@ interface VirtualMasonryProps<T extends { id?: string }> {
   gap?: number;
 }
 
+function seedVisible<T extends { id?: string }>(items: T[], columnCount: number) {
+  const seed = new Set<string>();
+  const n = Math.min(items.length, Math.max(columnCount * 3, 6));
+  for (let i = 0; i < n; i++) seed.add(items[i]?.id || `vi-${i}`);
+  return seed;
+}
+
 export function VirtualMasonry<T extends { id?: string }>({
   items,
   renderItem,
@@ -16,10 +23,22 @@ export function VirtualMasonry<T extends { id?: string }>({
   gap = 14,
 }: VirtualMasonryProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [visibleSet, setVisibleSet] = useState<Set<string>>(new Set());
+  const [visibleSet, setVisibleSet] = useState<Set<string>>(() => seedVisible(items, columnCount));
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const heightCache = useRef<Record<string, number>>({});
+  const seedRef = useRef(seedVisible(items, columnCount));
+
+  // Seed above-the-fold cards so first paint isn't blank placeholders
+  useEffect(() => {
+    const seeded = seedVisible(items, columnCount);
+    seedRef.current = seeded;
+    setVisibleSet((prev) => {
+      const next = new Set(prev);
+      for (const id of seeded) next.add(id);
+      return next;
+    });
+  }, [items, columnCount]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -31,7 +50,7 @@ export function VirtualMasonry<T extends { id?: string }>({
             const id = (e.target as HTMLElement).dataset.vid;
             if (!id) continue;
             if (e.isIntersecting) next.add(id);
-            else next.delete(id);
+            else if (!seedRef.current.has(id)) next.delete(id);
           }
           return next;
         });
