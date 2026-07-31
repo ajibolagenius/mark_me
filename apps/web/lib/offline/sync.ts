@@ -16,6 +16,37 @@ export type OutboxMutator = {
   };
 };
 
+const TERMINAL_CODES = new Set([
+  "BAD_REQUEST",
+  "NOT_FOUND",
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "CONFLICT",
+  "PAYLOAD_TOO_LARGE",
+  "METHOD_NOT_SUPPORTED",
+  "PRECONDITION_FAILED",
+  "UNPROCESSABLE_CONTENT",
+]);
+
+function errorInfo(err: unknown): { message: string; code?: string } {
+  if (err && typeof err === "object") {
+    const e = err as { message?: string; data?: { code?: string }; shape?: { data?: { code?: string } } };
+    return {
+      message: e.message || "Sync failed",
+      code: e.data?.code ?? e.shape?.data?.code,
+    };
+  }
+  return { message: "Sync failed" };
+}
+
+function isTerminalError(err: unknown): boolean {
+  const { code, message } = errorInfo(err);
+  if (code && TERMINAL_CODES.has(code)) return true;
+  // Zod / validation often surfaces without a stable code on the client
+  if (/invalid|validation|expected/i.test(message)) return true;
+  return false;
+}
+
 function remapIds(entries: OutboxEntry[], from: string, to: string): OutboxEntry[] {
   return entries.map((entry) => {
     const input = { ...entry.input };
@@ -30,14 +61,74 @@ function remapIds(entries: OutboxEntry[], from: string, to: string): OutboxEntry
   });
 }
 
+async function markEntryFailed(entry: OutboxEntry, err: unknown): Promise<void> {
+  const info = errorInfo(err);
+  const queue = await getOutbox();
+  await setOutbox(
+    queue.map((e) =>
+      e.id === entry.id
+        ? {
+            ...e,
+            status: "failed" as const,
+            attempts: (e.attempts ?? 0) + 1,
+            lastError: { message: info.message, code: info.code, at: Date.now() },
+          }
+        : e,
+    ),
+  );
+}
+
+async function bumpAttempt(entry: OutboxEntry, err: unknown): Promise<void> {
+  const info = errorInfo(err);
+  const queue = await getOutbox();
+  await setOutbox(
+    queue.map((e) =>
+      e.id === entry.id
+        ? {
+            ...e,
+            attempts: (e.attempts ?? 0) + 1,
+            lastError: { message: info.message, code: info.code, at: Date.now() },
+          }
+        : e,
+    ),
+  );
+}
+
+export async function discardOutboxEntry(id: string): Promise<void> {
+  await dequeueOutbox(id);
+}
+
+export async function retryOutboxEntry(id: string): Promise<void> {
+  const queue = await getOutbox();
+  await setOutbox(
+    queue.map((e) =>
+      e.id === id
+        ? { ...e, status: "pending" as const, lastError: undefined }
+        : e,
+    ),
+  );
+}
+
+export async function discardAllFailed(): Promise<void> {
+  const queue = await getOutbox();
+  await setOutbox(queue.filter((e) => e.status !== "failed"));
+}
+
 let flushing = false;
 
 export async function flushOutbox(
   client: OutboxMutator,
-): Promise<{ synced: number; remaining: number }> {
-  if (flushing) return { synced: 0, remaining: (await getOutbox()).length };
+): Promise<{ synced: number; remaining: number; failed: number }> {
+  const countFailed = async () =>
+    (await getOutbox()).filter((e) => e.status === "failed").length;
+
+  if (flushing) {
+    const q = await getOutbox();
+    return { synced: 0, remaining: q.length, failed: q.filter((e) => e.status === "failed").length };
+  }
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { synced: 0, remaining: (await getOutbox()).length };
+    const q = await getOutbox();
+    return { synced: 0, remaining: q.length, failed: q.filter((e) => e.status === "failed").length };
   }
 
   flushing = true;
@@ -46,7 +137,8 @@ export async function flushOutbox(
   try {
     while (true) {
       const queue = await getOutbox();
-      const entry = queue[0];
+      // Skip failed entries so they don't block the rest of the queue
+      const entry = queue.find((e) => e.status !== "failed");
       if (!entry) break;
 
       try {
@@ -89,8 +181,14 @@ export async function flushOutbox(
           const rest = await getOutbox();
           await setOutbox(remapIds(rest, entry.clientId, serverId));
         }
-      } catch {
-        // Preserve order — retry on the next online/focus event.
+      } catch (err) {
+        if (isTerminalError(err)) {
+          await markEntryFailed(entry, err);
+          // Continue flushing subsequent pending entries
+          continue;
+        }
+        await bumpAttempt(entry, err);
+        // Transient — stop and retry on next online/focus
         break;
       }
     }
@@ -98,5 +196,6 @@ export async function flushOutbox(
     flushing = false;
   }
 
-  return { synced, remaining: (await getOutbox()).length };
+  const remaining = (await getOutbox()).length;
+  return { synced, remaining, failed: await countFailed() };
 }

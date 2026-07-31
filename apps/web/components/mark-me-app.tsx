@@ -1,109 +1,33 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   T, TAG_COLORS, ACCENTS,
   Logo, Atmosphere,
-  uid, getDomain, getFavicon, tagColor,
+  uid, getDomain, getFavicon, tagColor, timeAgo,
+  Modal, ConfirmDialog, VirtualMasonry, SwipeRow, PullToRefresh, SkipLink,
+  ErrorBoundary, FaviconWithFallback, LinkPreview, Tag, Field, Highlight,
+  AnimCount, AnimatedCollapse, PageTransition, MobileNavOverlay,
+  useUndoToast, useIsMobile, useDebounce, useFocusTrap, useStagger,
 } from "@markme/ui";
 import { authClient } from "@/lib/auth/client";
 import {
   clearLastUser,
   createOutboxId,
+  discardAllFailed,
+  discardOutboxEntry,
   flushOutbox,
   getLastUser,
   notifyOutboxChanged,
   queueAndPatch,
+  remapOptimisticId,
+  retryOutboxEntry,
   setLastUser,
   useOnlineStatus,
   useOutboxCount,
+  useOutboxEntries,
+  useOutboxFailedCount,
 } from "@/lib/offline";
 import { trpc } from "@/lib/trpc";
-
-/* ── Relative time formatter ── */
-function timeAgo(ts) {
-  if (!ts) return null;
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days/7)}w ago`;
-  if (days < 365) return `${Math.floor(days/30)}mo ago`;
-  return `${Math.floor(days/365)}y ago`;
-}
-
-/* ── Favicon with shimmer loading + initial fallback ── */
-function FaviconWithFallback({ url, title, size = 20 }) {
-  const [state, setState] = useState("loading"); // loading | loaded | error
-  const letter = (title || getDomain(url) || "?")[0].toUpperCase();
-  const hash = (title || "").split("").reduce((a,c) => a + c.charCodeAt(0), 0);
-  const color = TAG_COLORS[hash % TAG_COLORS.length];
-
-  return (
-    <div style={{ width:size, height:size, flexShrink:0, position:"relative", marginTop:2 }}>
-      {/* Shimmer placeholder */}
-      {state === "loading" && (
-        <div aria-hidden="true" style={{ position:"absolute", inset:0, background:`linear-gradient(90deg, ${T.bgInput} 25%, rgba(255,255,255,0.06) 50%, ${T.bgInput} 75%)`, backgroundSize:"200% 100%", animation:"mmShimmer 1.2s ease infinite" }} />
-      )}
-      {/* Fallback initial */}
-      {state === "error" && (
-        <div aria-hidden="true" style={{
-          width:size, height:size, background:color+"25", border:`1px solid ${color}40`,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:size*0.5, fontWeight:800, color, fontFamily:T.font, lineHeight:1,
-        }}>{letter}</div>
-      )}
-      {/* Actual image */}
-      {state !== "error" && (
-        <img src={getFavicon(url)} alt="" width={size} height={size}
-          style={{ opacity:state==="loaded"?1:0, transition:"opacity 0.2s", display:"block" }}
-          onLoad={()=>setState("loaded")} onError={()=>setState("error")} />
-      )}
-    </div>
-  );
-}
-
-/* ── Link Preview Tooltip (desktop hover) ── */
-function LinkPreview({ url, title, children }) {
-  const [show, setShow] = useState(false);
-  const [pos, setPos] = useState({ x:0, y:0 });
-  const timer = useRef(null);
-  const domain = getDomain(url);
-
-  const onEnter = e => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPos({ x: rect.left, y: rect.top - 6 });
-    timer.current = setTimeout(() => setShow(true), 400);
-  };
-  const onLeave = () => { clearTimeout(timer.current); setShow(false); };
-
-  return (
-    <div onMouseEnter={onEnter} onMouseLeave={onLeave} style={{ display:"contents" }}>
-      {children}
-      {show && (
-        <div style={{
-          position:"fixed", left:Math.min(pos.x, window.innerWidth-260), top:pos.y, transform:"translateY(-100%)",
-          background:T.bgPanel, border:`1px solid ${T.border}`, padding:"10px 12px",
-          width:240, boxShadow:"4px 4px 0 rgba(0,0,0,0.4)", zIndex:800,
-          animation:"mmFadeIn .15s ease", pointerEvents:"none",
-        }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
-            <img src={getFavicon(url)} alt="" width={14} height={14} />
-            <span style={{ fontSize:11, fontWeight:700, color:T.text, fontFamily:T.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{title}</span>
-          </div>
-          <div style={{ fontSize:10, color:T.textMuted, fontFamily:T.font, display:"flex", alignItems:"center", gap:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-            <I.Globe /> {domain}
-          </div>
-          <div style={{ fontSize:10, color:T.textMuted, marginTop:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"monospace" }}>{url}</div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════════════════
    ICONS
@@ -151,6 +75,7 @@ const I = {
   Tab: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="0"/><path d="M2 8h20"/><path d="M8 4v4"/></svg>,
   Crown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 20h20M4 16l2-12 6 6 6-6 2 12z"/></svg>,
   Send: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>,
+  Grip: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>,
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -160,754 +85,6 @@ const S = {
   btn: { display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:T.font, fontWeight:600, fontSize:13, cursor:"pointer", transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)", border:"none", borderRadius:0, textDecoration:"none" },
   input: { width:"100%", padding:"12px 14px", background:T.bgInput, border:`1px solid ${T.border}`, borderRadius:0, color:T.text, fontSize:14, fontFamily:T.font, outline:"none", boxSizing:"border-box", transition:"border-color 0.2s" },
 };
-
-/* Modal — portaled to body so CatCard overflow/transform cannot clip it */
-function Modal({ open, onClose, title, children, wide }) {
-  const trapRef = useFocusTrap(open);
-  const titleId = useRef(`modal-title-${Math.random().toString(36).slice(2,6)}`).current;
-  const isMobile = useIsMobile();
-  const [mounted, setMounted] = useState(false);
-
-  // Drag-to-dismiss for bottom sheet
-  const dragStartY = useRef(0);
-  const dragDist = useRef(0);
-  const [sheetOffset, setSheetOffset] = useState(0);
-  const dragging = useRef(false);
-
-  useEffect(() => { setMounted(true); }, []);
-
-  const onDragStart = e => {
-    if (!isMobile) return;
-    dragStartY.current = e.touches[0].clientY;
-    dragging.current = true;
-  };
-  const onDragMove = e => {
-    if (!dragging.current) return;
-    const dy = e.touches[0].clientY - dragStartY.current;
-    if (dy < 0) return;
-    dragDist.current = dy;
-    setSheetOffset(dy);
-  };
-  const onDragEnd = () => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    if (dragDist.current > 100) {
-      setSheetOffset(600);
-      setTimeout(() => { onClose(); setSheetOffset(0); }, 200);
-    } else {
-      setSheetOffset(0);
-    }
-    dragDist.current = 0;
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = e => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) setSheetOffset(0);
-  }, [open]);
-
-  if (!open || !mounted) return null;
-
-  const panel = isMobile ? (
-    <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
-      style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", flexDirection:"column", justifyContent:"flex-end", background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .1s ease" }}
-      onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{
-        background:T.bgEl, borderTop:`1px solid ${T.border}`, maxHeight:"88vh",
-        display:"flex", flexDirection:"column", minHeight:0,
-        animation:"mmSheetUp .25s cubic-bezier(0.32,0.72,0,1)",
-        transform:`translateY(${sheetOffset}px)`,
-        transition: dragging.current ? "none" : "transform 0.25s cubic-bezier(0.32,0.72,0,1)",
-      }}>
-        <div onTouchStart={onDragStart} onTouchMove={onDragMove} onTouchEnd={onDragEnd}
-          style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center", cursor:"grab", touchAction:"none", flexShrink:0 }}>
-          <div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} />
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:0, padding:"14px 20px 0", flexShrink:0 }}>
-          <h2 id={titleId} style={{ fontFamily:T.font, fontSize:17, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
-          <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
-        </div>
-        <div className="mm-modal-scroll" style={{ padding:"18px 20px", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", minHeight:0, flex:1 }}>
-          {children}
-        </div>
-        <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)", flexShrink:0 }} />
-      </div>
-    </div>
-  ) : (
-    <div role="dialog" aria-modal="true" aria-labelledby={titleId} ref={trapRef}
-      style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease", padding:16 }} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{
-        background:T.bgEl, border:`1px solid ${T.border}`, width:wide?520:420, maxWidth:"100%",
-        maxHeight:"85vh", display:"flex", flexDirection:"column", minHeight:0,
-        boxShadow:"8px 8px 0 rgba(0,0,0,0.5)", animation:"mmSlideUp .2s ease",
-      }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"24px 28px 0", flexShrink:0 }}>
-          <h2 id={titleId} style={{ fontFamily:T.font, fontSize:18, fontWeight:800, margin:0, color:T.text, letterSpacing:"-0.03em" }}>{title}</h2>
-          <button onClick={onClose} aria-label="Close dialog" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
-        </div>
-        <div className="mm-modal-scroll" style={{ padding:"20px 28px 24px", overflowY:"auto", overscrollBehavior:"contain", minHeight:0, flex:1 }}>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-
-  return createPortal(panel, document.body);
-}
-
-/* Field */
-function Field({ label, type = "text", icon, rightIcon, onRightClick, id: propId, ...props }) {
-  const autoId = useRef(`field-${Math.random().toString(36).slice(2,7)}`).current;
-  const fieldId = propId || autoId;
-  return (
-    <div style={{ marginBottom:16 }}>
-      {label && <label htmlFor={fieldId} style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:6, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</label>}
-      <div style={{ position:"relative" }}>
-        {icon && <div style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:T.textMuted, display:"flex" }} aria-hidden="true">{icon}</div>}
-        <input id={fieldId} type={type} aria-label={label || props.placeholder} {...props} style={{ ...S.input, paddingLeft: icon ? 38 : 14, paddingRight: rightIcon ? 38 : 14, ...(props.style||{}) }}
-          onFocus={e=>e.target.style.borderColor=T.primary} onBlur={e=>e.target.style.borderColor=T.border} />
-        {rightIcon && <button onClick={onRightClick} type="button" aria-label={type==="password"?"Show password":"Toggle visibility"} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:T.textMuted, cursor:"pointer", display:"flex", padding:4 }}>{rightIcon}</button>}
-      </div>
-    </div>
-  );
-}
-
-/* Tag */
-function Tag({ tag, small, removable, onRemove, onClick, active }) {
-  const c = tagColor(tag);
-  const handleKey = e => { if (onClick && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(); } };
-  return (
-    <span onClick={onClick} onKeyDown={handleKey} role={onClick?"button":undefined} tabIndex={onClick?0:undefined}
-      aria-pressed={onClick ? (active ? "true" : "false") : undefined}
-      aria-label={onClick ? `Filter by ${tag}${active ? " (active)" : ""}` : undefined}
-      style={{ display:"inline-flex", alignItems:"center", gap:3, padding:small?"2px 8px":"3px 10px", fontSize:small?10:11, fontWeight:700, letterSpacing:"0.02em", textTransform:"uppercase", background:active?c:c+"20", color:active?T.bg:c, cursor:onClick?"pointer":"default", fontFamily:T.font, transition:"all 0.15s", whiteSpace:"nowrap", border:`1px solid ${active?c:c+"30"}`, outline:"none" }}>
-      {tag}{removable && <span onClick={e=>{e.stopPropagation();onRemove?.();}} role="button" tabIndex={0} aria-label={`Remove tag ${tag}`}
-        onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();onRemove?.();}}}
-        style={{ cursor:"pointer", marginLeft:2, opacity:0.7, fontSize:13, lineHeight:1 }}>&times;</span>}
-    </span>
-  );
-}
-
-/* Toast hook — supports simple messages + undo actions */
-function useUndoToast() {
-  const [toast, setToast] = useState(null);
-  const timerRef = useRef(null);
-  const countRef = useRef(null);
-
-  const clear = useCallback(() => {
-    clearTimeout(timerRef.current);
-    clearInterval(countRef.current);
-    setToast(null);
-  }, []);
-
-  const flash = useCallback((msg) => {
-    clear();
-    setToast({ msg });
-    timerRef.current = setTimeout(clear, 2200);
-  }, [clear]);
-
-  const flashUndo = useCallback((msg, onUndo, duration = 5000) => {
-    clear();
-    const end = Date.now() + duration;
-    setToast({ msg, onUndo, remaining: duration });
-    countRef.current = setInterval(() => {
-      const left = Math.max(0, end - Date.now());
-      if (left <= 0) { clear(); return; }
-      setToast(prev => prev ? { ...prev, remaining: left } : null);
-    }, 50);
-    timerRef.current = setTimeout(clear, duration);
-  }, [clear]);
-
-  const handleUndo = useCallback(() => {
-    if (toast?.onUndo) toast.onUndo();
-    clear();
-  }, [toast, clear]);
-
-  const secs = toast?.remaining ? Math.ceil(toast.remaining / 1000) : 0;
-  const pct = toast?.remaining ? (toast.remaining / 5000) * 100 : 0;
-
-  const ToastEl = toast ? (
-    <div role="status" aria-live="assertive" aria-atomic="true" style={{
-      position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)", zIndex:2000,
-      background:T.bgEl, border:`1px solid ${T.border}`, boxShadow:"6px 6px 0 rgba(0,0,0,0.5)",
-      animation:"mmSlideUp .2s ease", fontFamily:T.font, minWidth:260, maxWidth:"90vw", overflow:"hidden",
-    }}>
-      {toast.onUndo && (
-        <div style={{ height:3, background:T.error, width:`${pct}%`, transition:"width 0.1s linear" }} aria-hidden="true" />
-      )}
-      <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:12, justifyContent:"space-between" }}>
-        <span style={{ fontSize:13, fontWeight:600, color:T.text, display:"flex", alignItems:"center", gap:6 }}>
-          {toast.onUndo && <span aria-hidden="true" style={{ color:T.error, display:"flex" }}><I.Trash /></span>}
-          {toast.msg}
-        </span>
-        {toast.onUndo ? (
-          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-            <span style={{ fontSize:11, color:T.textMuted, fontVariantNumeric:"tabular-nums", minWidth:16, textAlign:"center" }}>{secs}s</span>
-            <button onClick={handleUndo} aria-label="Undo delete" style={{
-              ...S.btn, background:T.primary, color:T.onPrimary, padding:"5px 12px", fontSize:12, fontWeight:800,
-            }}
-              onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}
-            >Undo</button>
-            <button onClick={clear} aria-label="Dismiss" style={{ ...S.btn, background:"transparent", color:T.textMuted, padding:4 }}
-              onMouseEnter={e=>e.currentTarget.style.color=T.text} onMouseLeave={e=>e.currentTarget.style.color=T.textMuted}
-            ><I.X s={12} /></button>
-          </div>
-        ) : (
-          <span style={{ color:T.success, display:"flex" }}><I.Check /></span>
-        )}
-      </div>
-    </div>
-  ) : null;
-
-  return { flash, flashUndo, ToastEl };
-}
-
-/* ── Confirm Dialog ── */
-function ConfirmDialog({ open, onClose, onConfirm, title, message, itemName, count, confirmLabel }) {
-  const trapRef = useFocusTrap(open);
-  const titleId = useRef(`confirm-${Math.random().toString(36).slice(2,6)}`).current;
-  const isMobile = useIsMobile();
-  const actionLabel = confirmLabel || "Delete";
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = e => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    if (isMobile) document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [open, onClose, isMobile]);
-
-  if (!open) return null;
-
-  const content = (
-    <>
-      <div style={{ height:3, background:T.error }} aria-hidden="true" />
-      <div style={{ padding:"24px 24px 20px" }}>
-        <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:16 }}>
-          <div style={{ width:40, height:40, background:T.error+"15", border:`1px solid ${T.error}30`, display:"flex", alignItems:"center", justifyContent:"center", color:T.error, flexShrink:0 }}><I.Trash /></div>
-          <div>
-            <h3 id={titleId} style={{ fontFamily:T.font, fontSize:16, fontWeight:800, color:T.text, letterSpacing:"-0.02em", margin:"0 0 6px" }}>{title || "Delete forever?"}</h3>
-            <p id={`${titleId}-desc`} style={{ fontSize:13, color:T.textSec, lineHeight:1.5, margin:0 }}>{message || <>Are you sure you want to delete <strong style={{ color:T.text }}>{itemName}</strong>?</>}</p>
-            {count > 0 && <p style={{ fontSize:12, color:T.warning, marginTop:6, display:"flex", alignItems:"center", gap:4 }}><I.Zap /> This will also remove {count} bookmark{count !== 1 ? "s" : ""} inside</p>}
-          </div>
-        </div>
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-          <button onClick={onClose} aria-label="Cancel" style={{ ...S.btn, background:"transparent", color:T.textSec, padding:"9px 18px", border:`1px solid ${T.border}`, fontSize:13 }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.color=T.text}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.textSec}}>Cancel</button>
-          <button onClick={onConfirm} aria-label={`Confirm ${actionLabel}${itemName ? ` ${itemName}` : ""}`} style={{ ...S.btn, background:T.error, color:"#fff", padding:"9px 18px", fontSize:13, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.4)"}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="2px 2px 0 rgba(0,0,0,0.3)"}}>{actionLabel}</button>
-        </div>
-      </div>
-      {isMobile && <div style={{ paddingBottom:"env(safe-area-inset-bottom, 0px)" }} />}
-    </>
-  );
-
-  return createPortal(
-    <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={`${titleId}-desc`} ref={trapRef}
-      style={{
-        position:"fixed", inset:0, zIndex:1100,
-        display:"flex", alignItems:isMobile?"flex-end":"center", justifyContent:"center",
-        background:"rgba(0,0,0,0.65)", backdropFilter:"blur(12px)", animation:"mmFadeIn .15s ease",
-        padding:isMobile?0:16,
-      }} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{
-        background:T.bgEl, border:isMobile?"none":`1px solid ${T.error}30`,
-        borderTop:isMobile?`1px solid ${T.error}30`:undefined,
-        width:isMobile?"100%":400, maxWidth:"100%", overflow:"hidden",
-        boxShadow:isMobile?"none":"8px 8px 0 rgba(0,0,0,0.5)",
-        animation:isMobile?"mmSheetUp .25s cubic-bezier(0.32,0.72,0,1)":"mmSlideUp .2s ease",
-      }}>
-        {isMobile && <div style={{ padding:"10px 0 2px", display:"flex", justifyContent:"center" }}><div style={{ width:36, height:4, background:T.borderStrong, borderRadius:2 }} /></div>}
-        {content}
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-/* ── Animated Collapse (smooth expand/collapse) ── */
-function AnimatedCollapse({ open, children }) {
-  const contentRef = useRef(null);
-  const [height, setHeight] = useState(open ? "auto" : 0);
-  const [overflow, setOverflow] = useState(open ? "visible" : "hidden");
-  const isFirstRender = useRef(true);
-
-  useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
-    const el = contentRef.current;
-    if (!el) return;
-    if (open) {
-      const h = el.scrollHeight;
-      setHeight(0);
-      setOverflow("hidden");
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setHeight(h);
-          setTimeout(() => { setHeight("auto"); setOverflow("visible"); }, 320);
-        });
-      });
-    } else {
-      const h = el.scrollHeight;
-      setHeight(h);
-      setOverflow("hidden");
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setHeight(0));
-      });
-    }
-  }, [open]);
-
-  return (
-    <div ref={contentRef} style={{
-      height: typeof height === "number" ? height + "px" : height,
-      overflow,
-      transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease",
-      opacity: (typeof height === "number" && height === 0 && !open) ? 0 : 1,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-/* ── Page Transition Wrapper ── */
-function PageTransition({ pageKey, children }) {
-  const [displayChildren, setDisplayChildren] = useState(children);
-  const [phase, setPhase] = useState("in");
-  const prevKey = useRef(pageKey);
-
-  useEffect(() => {
-    if (pageKey !== prevKey.current) {
-      setPhase("out");
-      const t = setTimeout(() => {
-        setDisplayChildren(children);
-        prevKey.current = pageKey;
-        setPhase("in");
-      }, 200);
-      return () => clearTimeout(t);
-    } else {
-      setDisplayChildren(children);
-    }
-  }, [pageKey, children]);
-
-  return (
-    <div style={{
-      opacity: phase === "out" ? 0 : 1,
-      transform: phase === "out" ? "translateY(6px)" : "translateY(0)",
-      transition: "opacity 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1)",
-      willChange: "opacity, transform",
-    }}>
-      {displayChildren}
-    </div>
-  );
-}
-
-/* ── Animated Counter (stats roll up) ── */
-function AnimCount({ to, duration = 600 }) {
-  const [val, setVal] = useState(0);
-  const ref = useRef(null);
-  useEffect(() => {
-    const start = performance.now();
-    const from = 0;
-    const tick = now => {
-      const t = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setVal(Math.round(from + (to - from) * eased));
-      if (t < 1) ref.current = requestAnimationFrame(tick);
-    };
-    ref.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(ref.current);
-  }, [to, duration]);
-  return val;
-}
-
-/* ── Stagger entrance hook ── */
-function useStagger(count, baseDelay = 40, initialDelay = 60) {
-  return (i) => ({
-    animation: `mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${initialDelay + i * baseDelay}ms both`,
-  });
-}
-
-/* ── Focus Trap Hook (for modals & overlays) ── */
-function useFocusTrap(active) {
-  const trapRef = useRef(null);
-  const prevFocus = useRef(null);
-
-  useEffect(() => {
-    if (!active) return;
-    prevFocus.current = document.activeElement;
-    const el = trapRef.current;
-    if (!el) return;
-
-    const focusable = () => el.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-
-    const timer = setTimeout(() => {
-      const nodes = focusable();
-      if (nodes.length) nodes[0].focus();
-    }, 50);
-
-    const handleKey = e => {
-      if (e.key !== "Tab") return;
-      const nodes = focusable();
-      if (!nodes.length) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-
-    el.addEventListener("keydown", handleKey);
-    return () => {
-      clearTimeout(timer);
-      el.removeEventListener("keydown", handleKey);
-      if (prevFocus.current && prevFocus.current.focus) {
-        try { prevFocus.current.focus(); } catch {}
-      }
-    };
-  }, [active]);
-
-  return trapRef;
-}
-
-/* ── Skip to content link (screen reader shortcut) ── */
-const SkipLink = () => (
-  <a href="#main-content" style={{
-    position:"absolute", top:-40, left:0, background:T.primary, color:T.onPrimary,
-    padding:"8px 16px", zIndex:9999, fontSize:13, fontWeight:700, fontFamily:T.font,
-    transition:"top 0.2s", textDecoration:"none",
-  }} onFocus={e=>e.currentTarget.style.top="0"} onBlur={e=>e.currentTarget.style.top="-40px"}>
-    Skip to content
-  </a>
-);
-
-/* ── Mobile detection hook ── */
-function useIsMobile(breakpoint = 640) {
-  const [mobile, setMobile] = useState(typeof window !== "undefined" ? window.innerWidth <= breakpoint : false);
-  useEffect(() => {
-    const check = () => setMobile(window.innerWidth <= breakpoint);
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, [breakpoint]);
-  return mobile;
-}
-
-/* ── Debounce hook ── */
-function useDebounce(value, delay = 150) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
-
-/* ── Highlight matched text ── */
-function Highlight({ text, query }) {
-  if (!query || !text) return text || null;
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
-  if (parts.length === 1) return text;
-  return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} style={{ background:T.primary+"35", color:T.text, padding:"0 1px", borderRadius:0, fontWeight:700 }}>{part}</mark>
-      : part
-  );
-}
-
-/* ── Error Boundary ── */
-class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(err, info) { console.error("ErrorBoundary caught:", err, info); }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ background:T.bgEl, border:`1px solid ${T.error}30`, padding:24, margin:16, fontFamily:T.font }}>
-          <div style={{ height:3, background:T.error, marginBottom:16, marginTop:-24, marginLeft:-24, marginRight:-24 }} />
-          <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-            <div style={{ width:36, height:36, background:T.error+"15", border:`1px solid ${T.error}30`, display:"flex", alignItems:"center", justifyContent:"center", color:T.error, flexShrink:0 }}>
-              <I.Shield />
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <h3 style={{ fontFamily:T.font, fontSize:14, fontWeight:800, color:T.text, letterSpacing:"-0.02em", margin:"0 0 6px" }}>
-                {this.props.fallbackTitle || "Something went wrong"}
-              </h3>
-              <p style={{ fontSize:12, color:T.textMuted, lineHeight:1.5, margin:"0 0 12px" }}>
-                {this.props.fallbackMessage || "This section encountered an error. Your data is safe."}
-              </p>
-              <div style={{ fontSize:11, color:T.error, background:T.error+"10", border:`1px solid ${T.error}20`, padding:"6px 10px", marginBottom:12, fontFamily:"monospace", maxHeight:60, overflow:"auto", whiteSpace:"pre-wrap", wordBreak:"break-all" }}>
-                {this.state.error?.message || "Unknown error"}
-              </div>
-              <button onClick={() => this.setState({ error: null })}
-                style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:T.font, fontWeight:700, fontSize:12, cursor:"pointer", border:"none", borderRadius:0, background:T.error, color:"#fff", padding:"7px 16px", boxShadow:"2px 2px 0 rgba(0,0,0,0.3)", transition:"all 0.2s" }}>
-                Try again
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-/* ── Virtual Masonry Grid ── */
-function seedMasonryVisible(items, columnCount) {
-  const seed = new Set();
-  const n = Math.min(items.length, Math.max(columnCount * 3, 6));
-  for (let i = 0; i < n; i++) seed.add(items[i].id || `vi-${i}`);
-  return seed;
-}
-
-function VirtualMasonry({ items, renderItem, columnCount = 3, gap = 14 }) {
-  const containerRef = useRef(null);
-  const [visibleSet, setVisibleSet] = useState(() => seedMasonryVisible(items, columnCount));
-  const observerRef = useRef(null);
-  const sentinelRefs = useRef({});
-  const seedRef = useRef(seedMasonryVisible(items, columnCount));
-
-  // Estimated heights for placeholder sizing
-  const heightCache = useRef({});
-
-  // Seed above-the-fold cards so first paint isn't blank placeholders
-  useEffect(() => {
-    const seeded = seedMasonryVisible(items, columnCount);
-    seedRef.current = seeded;
-    setVisibleSet(prev => {
-      const next = new Set(prev);
-      for (const id of seeded) next.add(id);
-      return next;
-    });
-  }, [items, columnCount]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    observerRef.current = new IntersectionObserver(
-      entries => {
-        setVisibleSet(prev => {
-          const next = new Set(prev);
-          entries.forEach(e => {
-            const id = e.target.dataset.vid;
-            if (e.isIntersecting) next.add(id);
-            else if (!seedRef.current.has(id)) next.delete(id);
-          });
-          return next;
-        });
-      },
-      { root: null, rootMargin: "200px 0px", threshold: 0 }
-    );
-    return () => observerRef.current?.disconnect();
-  }, []);
-
-  // Re-observe when items change
-  useEffect(() => {
-    const obs = observerRef.current;
-    if (!obs) return;
-    obs.disconnect();
-    Object.values(sentinelRefs.current).forEach(el => { if (el) obs.observe(el); });
-  }, [items.length]);
-
-  const setSentinelRef = useCallback((id, el) => {
-    sentinelRefs.current[id] = el;
-    if (el && observerRef.current) observerRef.current.observe(el);
-  }, []);
-
-  // Measure rendered cards and cache heights
-  const onCardRender = useCallback((id, el) => {
-    if (el) heightCache.current[id] = el.offsetHeight;
-  }, []);
-
-  return (
-    <div ref={containerRef} style={{ columnCount, columnGap: gap }} className="mm-grid">
-      {items.map((item, i) => {
-        const id = item.id || `vi-${i}`;
-        const isVisible = visibleSet.has(id);
-        const cachedH = heightCache.current[id];
-        return (
-          <div key={id}
-            ref={el => setSentinelRef(id, el)}
-            data-vid={id}
-            style={{ breakInside:"avoid", marginBottom: gap, animation: isVisible ? `mmCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${Math.min(80 + i*40, 400)}ms both` : "none" }}>
-            {isVisible ? (
-              <div ref={el => onCardRender(id, el)}>
-                {renderItem(item, i)}
-              </div>
-            ) : (
-              <div style={{ height: cachedH || 160, background:"transparent" }} aria-hidden="true" />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ── Swipeable Bookmark Row ── */
-function SwipeRow({ onSwipeDelete, children }) {
-  const rowRef = useRef(null);
-  const startX = useRef(0);
-  const startY = useRef(0);
-  const currentX = useRef(0);
-  const swiping = useRef(false);
-  const [offset, setOffset] = useState(0);
-  const [showBg, setShowBg] = useState(false);
-  const THRESHOLD = 90;
-
-  const onTouchStart = e => {
-    const touch = e.touches[0];
-    startX.current = touch.clientX;
-    startY.current = touch.clientY;
-    currentX.current = 0;
-    swiping.current = false;
-  };
-
-  const onTouchMove = e => {
-    const touch = e.touches[0];
-    const dx = touch.clientX - startX.current;
-    const dy = touch.clientY - startY.current;
-    if (!swiping.current && Math.abs(dy) > Math.abs(dx)) return;
-    if (dx < -10) swiping.current = true;
-    if (!swiping.current) return;
-    e.preventDefault();
-    const clamped = Math.max(Math.min(dx, 0), -160);
-    currentX.current = clamped;
-    setOffset(clamped);
-    setShowBg(clamped < -20);
-  };
-
-  const onTouchEnd = () => {
-    if (currentX.current < -THRESHOLD) {
-      setOffset(-160);
-      setTimeout(() => {
-        onSwipeDelete();
-        setOffset(0);
-        setShowBg(false);
-      }, 200);
-    } else {
-      setOffset(0);
-      setShowBg(false);
-    }
-    swiping.current = false;
-  };
-
-  return (
-    <div style={{ position:"relative", overflow:"hidden" }}>
-      {/* Red background behind row */}
-      <div style={{
-        position:"absolute", inset:0, background:T.error,
-        display:"flex", alignItems:"center", justifyContent:"flex-end", paddingRight:20,
-        opacity:showBg ? 1 : 0, transition:"opacity 0.15s",
-      }}>
-        <div style={{ color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:700, fontFamily:T.font }}>
-          <I.Trash /> Delete
-        </div>
-      </div>
-      {/* Actual row content slides */}
-      <div ref={rowRef}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        style={{
-          transform:`translateX(${offset}px)`,
-          transition: offset === 0 || offset === -160 ? "transform 0.25s cubic-bezier(0.4,0,0.2,1)" : "none",
-          position:"relative", zIndex:1, background:T.bgEl,
-        }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/* ── Pull to Refresh ── */
-function PullToRefresh({ onRefresh, children }) {
-  const containerRef = useRef(null);
-  const startY = useRef(0);
-  const pulling = useRef(false);
-  const [pullDist, setPullDist] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const PULL_THRESHOLD = 70;
-
-  const onTouchStart = e => {
-    if (containerRef.current && containerRef.current.scrollTop === 0) {
-      startY.current = e.touches[0].clientY;
-      pulling.current = true;
-    }
-  };
-
-  const onTouchMove = e => {
-    if (!pulling.current) return;
-    const dy = e.touches[0].clientY - startY.current;
-    if (dy < 0) { pulling.current = false; setPullDist(0); return; }
-    const dampened = Math.min(dy * 0.45, 120);
-    setPullDist(dampened);
-  };
-
-  const onTouchEnd = () => {
-    if (pullDist >= PULL_THRESHOLD && !refreshing) {
-      setRefreshing(true);
-      setPullDist(50);
-      onRefresh();
-      setTimeout(() => {
-        setRefreshing(false);
-        setPullDist(0);
-      }, 800);
-    } else {
-      setPullDist(0);
-    }
-    pulling.current = false;
-  };
-
-  const ready = pullDist >= PULL_THRESHOLD;
-
-  return (
-    <div ref={containerRef}
-      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-      style={{ position:"relative" }}>
-      {/* Pull indicator */}
-      <div aria-hidden="true" style={{
-        height: pullDist, overflow:"hidden",
-        display:"flex", alignItems:"center", justifyContent:"center",
-        transition: pulling.current ? "none" : "height 0.3s cubic-bezier(0.4,0,0.2,1)",
-      }}>
-        {pullDist > 10 && (
-          <div style={{
-            display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-            opacity: Math.min(pullDist / 50, 1),
-            transform: `rotate(${refreshing ? 360 : ready ? 180 : (pullDist / PULL_THRESHOLD) * 180}deg)`,
-            transition: refreshing ? "transform 0.5s linear" : pulling.current ? "none" : "transform 0.2s ease",
-            animation: refreshing ? "mmSpin 0.6s linear infinite" : "none",
-          }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={ready || refreshing ? T.primary : T.textMuted} strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 19V5M5 12l7-7 7 7"/>
-            </svg>
-          </div>
-        )}
-        {pullDist > 10 && !refreshing && (
-          <span style={{ position:"absolute", fontSize:10, fontWeight:600, color:ready ? T.primary : T.textMuted, fontFamily:T.font, marginTop:30 }}>
-            {ready ? "Release to refresh" : "Pull to refresh"}
-          </span>
-        )}
-        {refreshing && (
-          <span style={{ position:"absolute", fontSize:10, fontWeight:600, color:T.primary, fontFamily:T.font, marginTop:30 }}>Refreshing…</span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════════════════
    PAGE: LANDING
@@ -1511,17 +688,39 @@ function BookmarkRow({ bm, accent, onEdit, onDelete, onTogglePin, searchQuery })
 
 function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
   const [f,setF]=useState({title:"",url:"",note:"",tags:[]}); const [ti,setTi]=useState("");
+  const [tagging, setTagging] = useState(false);
+  const autoTagMut = trpc.ai.autoTag.useMutation();
   useEffect(()=>{if(open){setF({title:bm?.title||"",url:bm?.url||"",note:bm?.note||"",tags:bm?.tags||[]});setTi("")}},[open,bm]);
   const addTag=()=>{const t=ti.trim().toLowerCase();if(t&&!f.tags.includes(t)){setF({...f,tags:[...f.tags,t]});setTi("")}};
   const ac=ACCENTS[accent]||ACCENTS[0];
   const save=()=>{if(!f.title.trim()||!f.url.trim())return;const url=f.url.startsWith("http")?f.url:`https://${f.url}`;onSave({...(bm||{}),title:f.title.trim(),url,note:f.note.trim(),tags:f.tags});onClose()};
+  const suggestTags = async () => {
+    if (tagging || !f.title.trim() || !f.url.trim()) return;
+    setTagging(true);
+    try {
+      const url = f.url.startsWith("http") ? f.url : `https://${f.url}`;
+      const r = await autoTagMut.mutateAsync({ title: f.title.trim(), url });
+      const merged = [...new Set([...f.tags, ...(r.tags||[])])];
+      setF(prev => ({ ...prev, tags: merged }));
+    } catch {
+      // best-effort suggestion; ignore failures silently
+    } finally {
+      setTagging(false);
+    }
+  };
   return (
     <Modal open={open} onClose={onClose} title={bm?"Edit Bookmark":"Add Bookmark"}>
       <Field label="Title" placeholder="My Bookmark" value={f.title} onChange={e=>setF({...f,title:e.target.value})} />
       <Field label="URL" placeholder="https://example.com" value={f.url} onChange={e=>setF({...f,url:e.target.value})} />
       <Field label="Note" placeholder="Why this is useful..." value={f.note} onChange={e=>setF({...f,note:e.target.value})} />
       <div style={{ marginBottom:14 }}>
-        <label style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, marginBottom:5, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>Tags</label>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:600, color:T.textMuted, fontFamily:T.font, textTransform:"uppercase", letterSpacing:"0.04em" }}>Tags</label>
+          <button type="button" onClick={suggestTags} disabled={tagging || !f.title.trim() || !f.url.trim()} aria-label="Suggest tags with AI"
+            style={{ ...S.btn, background:T.primarySubtle, color:T.primary, padding:"3px 8px", fontSize:10, fontWeight:700, border:`1px solid ${T.primary}30`, opacity:(tagging || !f.title.trim() || !f.url.trim())?0.5:1 }}>
+            <I.Sparkle /> {tagging ? "Thinking…" : "Suggest"}
+          </button>
+        </div>
         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>{f.tags.map(t=><Tag key={t} tag={t} removable onRemove={()=>setF({...f,tags:f.tags.filter(x=>x!==t)})} />)}</div>
         <div style={{ display:"flex", gap:6 }}>
           <input value={ti} onChange={e=>setTi(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addTag())} placeholder="Add tag…" style={{ ...S.input, flex:1 }} />
@@ -1534,21 +733,50 @@ function BmModal({ open, onClose, onSave, bm, allTags, accent }) {
   );
 }
 
-const CatCard = React.memo(function CatCard({ cat, onTogglePin, onSaveBm, onDelete, onEdit, onDeleteBm, allTags, searchQuery }) {
+const CatCard = React.memo(function CatCard({ cat, onTogglePin, onSaveBm, onDelete, onEdit, onDeleteBm, allTags, searchQuery, dragEnabled, onReorder }) {
   const [exp,setExp]=useState(true); const [addBm,setAddBm]=useState(false); const [editBm,setEditBm]=useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const ac=ACCENTS[cat.color]||ACCENTS[0]; const sorted=[...cat.bookmarks].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
   const isMobile = useIsMobile();
   const q = searchQuery || "";
   const isEmpty = cat.bookmarks.length === 0;
+
+  const onHandleDragStart = e => {
+    if (!dragEnabled) return;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", cat.id);
+  };
+  const onCardDragOver = e => {
+    if (!dragEnabled) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (!dragOver) setDragOver(true);
+  };
+  const onCardDragLeave = () => setDragOver(false);
+  const onCardDrop = e => {
+    if (!dragEnabled) return;
+    e.preventDefault();
+    setDragOver(false);
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (draggedId && draggedId !== cat.id) onReorder?.(draggedId, cat.id);
+  };
+
   return (
-    <article aria-label={`${cat.name} category — ${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{ background:T.bgEl, border:`1px solid ${T.border}`, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
+    <article aria-label={`${cat.name} category — ${cat.bookmarks.length} bookmark${cat.bookmarks.length!==1?"s":""}`} style={{ background:T.bgEl, border:`1px solid ${dragOver?ac.bg:T.border}`, outline:dragOver?`2px dashed ${ac.bg}`:"none", outlineOffset:-4, overflow:"hidden", transition:"all 0.2s", marginBottom:16, position:"relative", boxShadow:"4px 4px 0 rgba(0,0,0,0.3)" }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.borderStrong;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="6px 6px 0 rgba(0,0,0,0.4)"}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.3)"}}>
+      onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="4px 4px 0 rgba(0,0,0,0.3)"}}
+      onDragOver={onCardDragOver} onDragLeave={onCardDragLeave} onDrop={onCardDrop}>
       <div style={{ height:3, background:ac.bg }} aria-hidden="true" />
       <div style={{ position:"absolute", top:-40, right:-40, width:120, height:120, borderRadius:"50%", background:ac.bg, filter:"blur(60px)", opacity:0.12, pointerEvents:"none" }} aria-hidden="true" />
       <div style={{ padding:"16px 18px 12px", position:"relative" }}>
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0 }}>
+            {dragEnabled && (
+              <span draggable onDragStart={onHandleDragStart} role="button" tabIndex={0} aria-label={`Drag to reorder ${cat.name}`}
+                style={{ cursor:"grab", color:T.textMuted, display:"flex", touchAction:"none", flexShrink:0 }}>
+                <I.Grip />
+              </span>
+            )}
             <span style={{ fontSize:22, lineHeight:1 }} aria-hidden="true">{cat.icon}</span>
             <div style={{ minWidth:0 }}>
               <h3 style={{ margin:0, fontFamily:T.font, fontSize:15, fontWeight:800, color:T.text, letterSpacing:"-0.03em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}><Highlight text={cat.name} query={q} /></h3>
@@ -1657,48 +885,26 @@ function CatModal({ open, onClose, onSave, cat }) {
   );
 }
 
-/* ── Mobile Nav Overlay (with focus trap) ── */
-function MobileNavOverlay({ onClose, items }) {
-  const trapRef = useFocusTrap(true);
-  useEffect(() => {
-    const onKey = e => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div role="dialog" aria-modal="true" aria-label="Navigation menu" ref={trapRef}
-      style={{ position:"fixed", inset:0, zIndex:900, background:"rgba(0,0,0,0.5)", backdropFilter:"blur(8px)", animation:"mmFadeIn .15s ease" }} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:T.bgEl, borderBottom:`1px solid ${T.border}`, padding:16, animation:"mmSlideDown .2s ease" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-          <span style={{ fontWeight:800, fontSize:16 }}>Menu</span>
-          <button onClick={onClose} aria-label="Close menu" style={{ ...S.btn, background:T.bgInput, width:32, height:32, padding:0, color:T.textMuted, border:`1px solid ${T.border}` }}><I.X /></button>
-        </div>
-        <nav aria-label="Mobile navigation">
-          {items.map((it,i) => (
-            <button key={i} onClick={it.fn} style={{ ...S.btn, width:"100%", padding:14, justifyContent:"flex-start", background:"transparent", color:T.textSec, borderBottom:`1px solid ${T.border}`, fontSize:14, gap:10 }}>{it.icon} {it.label}</button>
-          ))}
-        </nav>
-      </div>
-    </div>
-  );
-}
-
 function Dashboard({ user, onNavigate, onLogout }) {
   const utils = trpc.useUtils();
   const online = useOnlineStatus();
   const outboxCount = useOutboxCount();
+  const outboxEntries = useOutboxEntries();
+  const failedCount = useOutboxFailedCount();
+  const pendingCount = Math.max(0, outboxCount - failedCount);
   const { data: categories = [], isLoading, refetch } = trpc.category.list.useQuery(undefined, {
     enabled: !!user,
     retry: online ? 1 : 0,
   });
-  const createCat = trpc.category.create.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const updateCat = trpc.category.update.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const deleteCatMut = trpc.category.delete.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const createBm = trpc.bookmark.create.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const updateBm = trpc.bookmark.update.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const deleteBmMut = trpc.bookmark.delete.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const togglePinMut = trpc.bookmark.togglePin.useMutation({ onSuccess: () => utils.category.list.invalidate() });
-  const importJson = trpc.export.fromJSON.useMutation({ onSuccess: () => utils.category.list.invalidate() });
+  const createCat = trpc.category.create.useMutation();
+  const updateCat = trpc.category.update.useMutation();
+  const deleteCatMut = trpc.category.delete.useMutation();
+  const createBm = trpc.bookmark.create.useMutation();
+  const updateBm = trpc.bookmark.update.useMutation();
+  const deleteBmMut = trpc.bookmark.delete.useMutation();
+  const togglePinMut = trpc.bookmark.togglePin.useMutation();
+  const importJson = trpc.export.fromJSON.useMutation();
+  const reorderCat = trpc.category.reorder.useMutation();
 
   const [searchInput,setSearchInput]=useState("");
   const debouncedSearch = useDebounce(searchInput, 150);
@@ -1750,9 +956,15 @@ function Dashboard({ user, onNavigate, onLogout }) {
     else if (sortBy === "za") result = [...result].sort((a,b) => b.name.localeCompare(a.name));
     else if (sortBy === "most") result = [...result].sort((a,b) => b.bookmarks.length - a.bookmarks.length);
     else if (sortBy === "least") result = [...result].sort((a,b) => a.bookmarks.length - b.bookmarks.length);
-    else if (sortBy === "newest") result = [...result].reverse();
+    else if (sortBy === "newest") result = [...result].sort((a,b) => {
+      const ta = Math.max(0, ...a.bookmarks.map(bm => bm.addedAt || 0));
+      const tb = Math.max(0, ...b.bookmarks.map(bm => bm.addedAt || 0));
+      return tb - ta;
+    });
     return result;
   },[categories,debouncedSearch,filterTag,sortBy]);
+
+  const dragEnabled = sortBy === "default" && !debouncedSearch.trim() && !filterTag;
 
   const saveCat = async cat => {
     try {
@@ -1764,9 +976,16 @@ function Dashboard({ user, onNavigate, onLogout }) {
           color: cat.color ?? 0,
           tags: cat.tags || [],
         };
-        const offline = await queueAndPatch(utils.category.list, "category.update", input);
-        if (!offline.queued) await updateCat.mutateAsync(input);
-        flash(offline.queued ? "Category updated (pending sync)" : "Category updated ✓");
+        const result = await queueAndPatch(utils.category.list, "category.update", input);
+        if (!result.queued) {
+          try {
+            await updateCat.mutateAsync(input);
+          } catch (err) {
+            await utils.category.list.invalidate();
+            throw err;
+          }
+        }
+        flash(result.queued ? "Category updated (pending sync)" : "Category updated ✓");
       } else {
         const clientId = cat.id || createOutboxId();
         const input = {
@@ -1775,14 +994,44 @@ function Dashboard({ user, onNavigate, onLogout }) {
           color: cat.color ?? 0,
           tags: cat.tags || [],
         };
-        const offline = await queueAndPatch(utils.category.list, "category.create", input, { clientId });
-        if (!offline.queued) await createCat.mutateAsync(input);
-        flash(offline.queued ? "Category created (pending sync)" : "Category created ✓");
+        const result = await queueAndPatch(utils.category.list, "category.create", input, { clientId });
+        if (!result.queued) {
+          try {
+            const server = await createCat.mutateAsync(input);
+            if (clientId && server?.id) remapOptimisticId(utils.category.list, clientId, server.id);
+          } catch (err) {
+            await utils.category.list.invalidate();
+            throw err;
+          }
+        }
+        flash(result.queued ? "Category created (pending sync)" : "Category created ✓");
       }
       setShowNewCat(false);
       setEditCat(null);
     } catch (err) {
       flash(err?.message || "Could not save category");
+    }
+  };
+
+  const onReorderCat = async (draggedId, targetId) => {
+    if (draggedId === targetId) return;
+    const ids = categories.map(c => c.id);
+    const fromIdx = ids.indexOf(draggedId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const nextIds = [...ids];
+    nextIds.splice(fromIdx, 1);
+    nextIds.splice(toIdx, 0, draggedId);
+    utils.category.list.setData(undefined, (old) => {
+      if (!old) return old;
+      const byId = new Map(old.map(c => [c.id, c]));
+      return nextIds.map(id => byId.get(id)).filter(Boolean);
+    });
+    try {
+      await reorderCat.mutateAsync({ orderedIds: nextIds });
+    } catch (err) {
+      await utils.category.list.invalidate();
+      flash(err?.message || "Could not reorder categories");
     }
   };
 
@@ -1830,16 +1079,37 @@ function Dashboard({ user, onNavigate, onLogout }) {
     e.target.value = "";
   };
 
-  const confirmImportReplace = async () => {
+  const doImport = async mode => {
     const payload = confirmImport?.categories;
     setConfirmImport(null);
     if (!payload) return;
     try {
-      await importJson.mutateAsync({ categories: payload });
-      flash("Imported ✓");
+      await importJson.mutateAsync({ categories: payload, mode });
+      await utils.category.list.invalidate();
+      flash(mode === "merge" ? "Imported (merged) ✓" : "Imported ✓");
     } catch (err) {
       flash(err?.message || "Import failed");
     }
+  };
+
+  const retryAllFailed = async () => {
+    for (const entry of outboxEntries.filter(e => e.status === "failed")) {
+      await retryOutboxEntry(entry.id);
+    }
+    notifyOutboxChanged();
+    const result = await flushOutbox(utils.client);
+    if (result.synced > 0) {
+      await utils.category.list.invalidate();
+      flash(`Synced ${result.synced} change${result.synced === 1 ? "" : "s"} ✓`);
+    }
+    notifyOutboxChanged();
+  };
+
+  const discardAllFailedHandler = async () => {
+    await discardAllFailed();
+    notifyOutboxChanged();
+    await utils.category.list.invalidate();
+    flash("Discarded failed changes");
   };
 
   const requestDeleteCat = cat => setConfirmDel({ cat });
@@ -1849,9 +1119,16 @@ function Dashboard({ user, onNavigate, onLogout }) {
     setConfirmDel(null);
     try {
       const input = { id: cat.id };
-      const offline = await queueAndPatch(utils.category.list, "category.delete", input);
-      if (!offline.queued) await deleteCatMut.mutateAsync(input);
-      flash(offline.queued ? `"${cat.name}" deleted (pending sync)` : `"${cat.name}" deleted`);
+      const result = await queueAndPatch(utils.category.list, "category.delete", input);
+      if (!result.queued) {
+        try {
+          await deleteCatMut.mutateAsync(input);
+        } catch (err) {
+          await utils.category.list.invalidate();
+          throw err;
+        }
+      }
+      flash(result.queued ? `"${cat.name}" deleted (pending sync)` : `"${cat.name}" deleted`);
     } catch (err) {
       flash(err?.message || "Delete failed");
     }
@@ -1868,9 +1145,16 @@ function Dashboard({ user, onNavigate, onLogout }) {
           tags: bm.tags || [],
           categoryId,
         };
-        const offline = await queueAndPatch(utils.category.list, "bookmark.update", input);
-        if (!offline.queued) await updateBm.mutateAsync(input);
-        flash(offline.queued ? "Bookmark updated (pending sync)" : "Bookmark updated ✓");
+        const result = await queueAndPatch(utils.category.list, "bookmark.update", input);
+        if (!result.queued) {
+          try {
+            await updateBm.mutateAsync(input);
+          } catch (err) {
+            await utils.category.list.invalidate();
+            throw err;
+          }
+        }
+        flash(result.queued ? "Bookmark updated (pending sync)" : "Bookmark updated ✓");
       } else {
         const clientId = bm.id || createOutboxId();
         const input = {
@@ -1881,9 +1165,17 @@ function Dashboard({ user, onNavigate, onLogout }) {
           tags: bm.tags || [],
           pinned: bm.pinned || false,
         };
-        const offline = await queueAndPatch(utils.category.list, "bookmark.create", input, { clientId });
-        if (!offline.queued) await createBm.mutateAsync(input);
-        flash(offline.queued ? "Bookmark added (pending sync)" : "Bookmark added ✓");
+        const result = await queueAndPatch(utils.category.list, "bookmark.create", input, { clientId });
+        if (!result.queued) {
+          try {
+            const server = await createBm.mutateAsync(input);
+            if (clientId && server?.id) remapOptimisticId(utils.category.list, clientId, server.id);
+          } catch (err) {
+            await utils.category.list.invalidate();
+            throw err;
+          }
+        }
+        flash(result.queued ? "Bookmark added (pending sync)" : "Bookmark added ✓");
       }
     } catch (err) {
       flash(err?.message || "Could not save bookmark");
@@ -1897,10 +1189,17 @@ function Dashboard({ user, onNavigate, onLogout }) {
     const label = bmTitle || snapshot?.title || "bookmark";
     try {
       const input = { id: bmId };
-      const offline = await queueAndPatch(utils.category.list, "bookmark.delete", input);
-      if (!offline.queued) await deleteBmMut.mutateAsync(input);
+      const result = await queueAndPatch(utils.category.list, "bookmark.delete", input);
+      if (!result.queued) {
+        try {
+          await deleteBmMut.mutateAsync(input);
+        } catch (err) {
+          await utils.category.list.invalidate();
+          throw err;
+        }
+      }
       flashUndo(
-        offline.queued ? `"${label}" removed (pending sync)` : `"${label}" removed`,
+        result.queued ? `"${label}" removed (pending sync)` : `"${label}" removed`,
         async () => {
           if (!snapshot) return;
           try {
@@ -1914,7 +1213,15 @@ function Dashboard({ user, onNavigate, onLogout }) {
               pinned: snapshot.pinned || false,
             };
             const queued = await queueAndPatch(utils.category.list, "bookmark.create", restore, { clientId });
-            if (!queued.queued) await createBm.mutateAsync(restore);
+            if (!queued.queued) {
+              try {
+                const server = await createBm.mutateAsync(restore);
+                if (server?.id) remapOptimisticId(utils.category.list, clientId, server.id);
+              } catch (err) {
+                await utils.category.list.invalidate();
+                throw err;
+              }
+            }
             flash(queued.queued ? "Restored (pending sync)" : "Restored ✓");
           } catch {
             flash("Could not undo delete");
@@ -1929,8 +1236,15 @@ function Dashboard({ user, onNavigate, onLogout }) {
   const togglePin = async id => {
     try {
       const input = { id };
-      const offline = await queueAndPatch(utils.category.list, "bookmark.togglePin", input);
-      if (!offline.queued) await togglePinMut.mutateAsync(input);
+      const result = await queueAndPatch(utils.category.list, "bookmark.togglePin", input);
+      if (!result.queued) {
+        try {
+          await togglePinMut.mutateAsync(input);
+        } catch (err) {
+          await utils.category.list.invalidate();
+          throw err;
+        }
+      }
     } catch (err) {
       flash(err?.message || "Could not update pin");
     }
@@ -1974,7 +1288,7 @@ function Dashboard({ user, onNavigate, onLogout }) {
       </nav>
 
       {/* Mobile menu */}
-      {mobileNav && <MobileNavOverlay onClose={()=>setMobileNav(false)}
+      <MobileNavOverlay open={mobileNav} onClose={()=>setMobileNav(false)}
         items={[
           {icon:<I.Plus />,label:"New Category",fn:()=>{setShowNewCat(true);setMobileNav(false)}},
           {icon:<I.Sparkle />,label:online?"AI Assistant":"AI (online only)",fn:()=>{ if (!online) { flash("AI needs a connection"); setMobileNav(false); return; } setShowAi(true);setMobileNav(false)}},
@@ -1982,9 +1296,32 @@ function Dashboard({ user, onNavigate, onLogout }) {
           {icon:<I.Import />,label:online?"Import":"Import (online only)",fn:()=>{ if (!online) { flash("Import needs a connection"); setMobileNav(false); return; } fileRef.current?.click();setMobileNav(false)}},
           {icon:<I.User />,label:"Profile",fn:()=>{onNavigate("profile");setMobileNav(false)}},
           {icon:<I.LogOut />,label:"Log out",fn:()=>{onLogout();setMobileNav(false)}},
-        ]} />}
+        ]} />
 
-      {(!online || outboxCount > 0) && (
+      {failedCount > 0 && (
+        <div role="alert" style={{
+          background: T.error+"12",
+          borderBottom: `1px solid ${T.error}40`,
+          color: T.error,
+          padding: "8px 16px",
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: T.font,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexWrap: "wrap",
+          gap: 8,
+          position: "relative",
+          zIndex: 99,
+        }}>
+          <I.Zap /> {failedCount} change{failedCount === 1 ? "" : "s"} failed to sync
+          <button onClick={retryAllFailed} style={{ ...S.btn, background:T.error, color:"#fff", padding:"4px 10px", fontSize:11, fontWeight:800 }}>Retry all</button>
+          <button onClick={discardAllFailedHandler} style={{ ...S.btn, background:"transparent", color:T.error, padding:"4px 10px", fontSize:11, fontWeight:700, border:`1px solid ${T.error}40` }}>Discard failed</button>
+        </div>
+      )}
+
+      {(!online || pendingCount > 0) && (
         <div role="status" aria-live="polite" style={{
           background: !online ? T.secondarySubtle : T.primarySubtle,
           borderBottom: `1px solid ${!online ? T.secondary+"40" : T.primary+"40"}`,
@@ -2002,8 +1339,8 @@ function Dashboard({ user, onNavigate, onLogout }) {
         }}>
           <I.Cloud />
           {!online
-            ? `You're offline${outboxCount ? ` · ${outboxCount} change${outboxCount === 1 ? "" : "s"} will sync later` : " · browsing last synced bookmarks"}`
-            : `Syncing ${outboxCount} pending change${outboxCount === 1 ? "" : "s"}…`}
+            ? `You're offline${pendingCount ? ` · ${pendingCount} change${pendingCount === 1 ? "" : "s"} will sync later` : " · browsing last synced bookmarks"}`
+            : `Syncing ${pendingCount} pending change${pendingCount === 1 ? "" : "s"}…`}
         </div>
       )}
 
@@ -2065,6 +1402,8 @@ function Dashboard({ user, onNavigate, onLogout }) {
               onSaveBm={saveBm}
               onDelete={requestDeleteCat}
               onDeleteBm={deleteBm}
+              dragEnabled={dragEnabled}
+              onReorder={onReorderCat}
               onEdit={c=>setEditCat(c)} />
           )} />
         </ErrorBoundary>
@@ -2095,21 +1434,20 @@ function Dashboard({ user, onNavigate, onLogout }) {
         itemName={confirmDel?.cat?.name}
         count={confirmDel?.cat?.bookmarks?.length || 0}
       />
-      <ConfirmDialog
-        open={!!confirmImport}
-        onClose={()=>setConfirmImport(null)}
-        onConfirm={confirmImportReplace}
-        title="Replace all bookmarks?"
-        message={
-          <>
-            Importing will permanently replace your current library with{" "}
-            <strong style={{ color: T.text }}>{confirmImport?.catCount ?? 0} categor{(confirmImport?.catCount ?? 0) === 1 ? "y" : "ies"}</strong>
-            {" "}({confirmImport?.bmCount ?? 0} bookmark{(confirmImport?.bmCount ?? 0) === 1 ? "" : "s"}). This cannot be undone.
-          </>
-        }
-        confirmLabel="Replace all"
-      />
-      <AiPanel open={showAi} onClose={()=>setShowAi(false)} categories={categories} />
+      <Modal open={!!confirmImport} onClose={()=>setConfirmImport(null)} title="Import bookmarks?">
+        <p style={{ fontSize:13, color:T.textSec, lineHeight:1.6, marginBottom:18 }}>
+          File has <strong style={{ color:T.text }}>{confirmImport?.catCount ?? 0} categor{(confirmImport?.catCount ?? 0) === 1 ? "y" : "ies"}</strong>
+          {" "}({confirmImport?.bmCount ?? 0} bookmark{(confirmImport?.bmCount ?? 0) === 1 ? "" : "s"}).{" "}
+          <strong style={{ color:T.text }}>Merge</strong> adds them into your library without wiping anything.{" "}
+          <strong style={{ color:T.error }}>Replace all</strong> deletes your current library first — this cannot be undone.
+        </p>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={()=>doImport("merge")} style={{ ...S.btn, flex:1, padding:"11px", background:T.primary, color:T.onPrimary, fontSize:13, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}>Merge</button>
+          <button onClick={()=>doImport("replace")} style={{ ...S.btn, flex:1, padding:"11px", background:T.error, color:"#fff", fontSize:13, fontWeight:800, boxShadow:"2px 2px 0 rgba(0,0,0,0.3)" }}>Replace all</button>
+        </div>
+        <button onClick={()=>setConfirmImport(null)} style={{ ...S.btn, width:"100%", marginTop:8, padding:"9px", background:"transparent", color:T.textMuted, border:`1px solid ${T.border}`, fontSize:12 }}>Cancel</button>
+      </Modal>
+      <AiPanel open={showAi} onClose={()=>setShowAi(false)} categories={categories} onBookmarksChanged={()=>utils.category.list.invalidate()} />
       {ToastEl}
 
       <style>{`
@@ -2396,14 +1734,27 @@ function NewTabPage({ onNavigate, categories }) {
 /* ══════════════════════════════════════════════════════════════════════════
    AI PANEL (used inside Dashboard)
    ══════════════════════════════════════════════════════════════════════════ */
-function AiPanel({ open, onClose, categories }) {
+function AiPanel({ open, onClose, categories, onBookmarksChanged }) {
   const trapRef = useFocusTrap(open);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { role:"ai", text:"Hi! I'm your bookmark AI assistant. I can help you auto-tag bookmarks, summarize categories, find duplicates, or discover connections. Try asking me something!" },
+    { role:"ai", kind:"text", text:"Hi! I'm your bookmark AI assistant. I can auto-tag bookmarks, summarize a category, find duplicates, or suggest reorganizations. Try a shortcut below or ask me something!" },
   ]);
   const [loading, setLoading] = useState(false);
+  const [busyChip, setBusyChip] = useState(null);
   const scrollRef = useRef(null);
+
+  const autoTagMut = trpc.ai.autoTag.useMutation();
+  const summarizeMut = trpc.ai.summarize.useMutation();
+  const duplicatesMut = trpc.ai.detectDuplicates.useMutation();
+  const reorganizeMut = trpc.ai.reorganize.useMutation();
+  const updateBmMut = trpc.bookmark.update.useMutation();
+  const deleteBmMut = trpc.bookmark.delete.useMutation();
+
+  const allBookmarks = useMemo(
+    () => categories.flatMap(c => c.bookmarks.map(b => ({ ...b, categoryName: c.name }))),
+    [categories],
+  );
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -2416,11 +1767,19 @@ function AiPanel({ open, onClose, categories }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const pushMessage = msg => setMessages(prev => [...prev, msg]);
+  const updateLastMessage = updater => setMessages(prev => {
+    const next = [...prev];
+    next[next.length - 1] = updater(next[next.length - 1]);
+    return next;
+  });
+  const patchMessage = (predicate, updater) => setMessages(prev => prev.map(m => (predicate(m) ? updater(m) : m)));
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userMsg = input.trim();
     setInput("");
-    setMessages(prev => [...prev, { role:"user", text:userMsg }, { role:"ai", text:"" }]);
+    setMessages(prev => [...prev, { role:"user", kind:"text", text:userMsg }, { role:"ai", kind:"text", text:"" }]);
     setLoading(true);
 
     try {
@@ -2456,11 +1815,7 @@ function AiPanel({ open, onClose, categories }) {
             if (data.error) throw new Error(data.error);
             if (data.text) {
               aiText += data.text;
-              setMessages(prev => {
-                const next = [...prev];
-                next[next.length - 1] = { role: "ai", text: aiText };
-                return next;
-              });
+              updateLastMessage(() => ({ role: "ai", kind:"text", text: aiText }));
             }
           } catch (parseErr) {
             if (parseErr instanceof Error && parseErr.message !== "Unexpected end of JSON input") {
@@ -2471,29 +1826,149 @@ function AiPanel({ open, onClose, categories }) {
         }
       }
       if (!aiText) {
-        setMessages(prev => {
-          const next = [...prev];
-          next[next.length - 1] = { role: "ai", text: "No response from AI. Set OPENROUTER_API_KEY on the server for live answers." };
-          return next;
-        });
+        updateLastMessage(() => ({ role: "ai", kind:"text", text: "No response from AI. Set OPENROUTER_API_KEY on the server for live answers." }));
       }
     } catch (err) {
-      setMessages(prev => {
-        const next = [...prev];
-        next[next.length - 1] = { role: "ai", text: err?.message || "Connection error. Please try again." };
-        return next;
-      });
+      updateLastMessage(() => ({ role: "ai", kind:"text", text: err?.message || "Connection error. Please try again." }));
     }
     setLoading(false);
   };
 
+  const runAutoTag = async () => {
+    if (busyChip) return;
+    setBusyChip("autotag");
+    pushMessage({ role:"user", kind:"text", text:"Auto-tag recent bookmarks" });
+    pushMessage({ role:"ai", kind:"loading", text:"Scanning recent bookmarks…" });
+    try {
+      const candidates = allBookmarks.filter(b => (b.tags?.length || 0) < 2).slice(0, 8);
+      if (candidates.length === 0) {
+        updateLastMessage(() => ({ role:"ai", kind:"text", text:"All your recent bookmarks already have good tags! 🎉" }));
+        return;
+      }
+      const items = [];
+      for (const bm of candidates) {
+        try {
+          const r = await autoTagMut.mutateAsync({ title: bm.title, url: bm.url });
+          items.push({ id: bm.id, title: bm.title, url: bm.url, currentTags: bm.tags || [], suggestedTags: r.tags || [] });
+        } catch {
+          // skip bookmarks that fail individually
+        }
+      }
+      if (items.length === 0) {
+        updateLastMessage(() => ({ role:"ai", kind:"text", text:"Could not generate tag suggestions right now." }));
+      } else {
+        updateLastMessage(() => ({ role:"ai", kind:"autotag", text:`Tag suggestions for ${items.length} bookmark${items.length===1?"":"s"}:`, items }));
+      }
+    } catch (err) {
+      updateLastMessage(() => ({ role:"ai", kind:"text", text: err?.message || "Could not auto-tag bookmarks." }));
+    } finally {
+      setBusyChip(null);
+    }
+  };
+
+  const applyAutoTag = async item => {
+    try {
+      const merged = [...new Set([...(item.currentTags||[]), ...(item.suggestedTags||[])])];
+      await updateBmMut.mutateAsync({ id: item.id, tags: merged });
+      patchMessage(
+        m => m.kind === "autotag",
+        m => ({ ...m, items: m.items.map(it => (it.id === item.id ? { ...it, applied:true } : it)) }),
+      );
+      onBookmarksChanged?.();
+    } catch (err) {
+      pushMessage({ role:"ai", kind:"text", text: err?.message || "Could not apply tags." });
+    }
+  };
+
+  const runSummarize = async () => {
+    if (busyChip) return;
+    const cat = categories.find(c => c.bookmarks.length > 0) || categories[0];
+    if (!cat) {
+      pushMessage({ role:"ai", kind:"text", text:"You don't have any categories yet." });
+      return;
+    }
+    setBusyChip("summarize");
+    pushMessage({ role:"user", kind:"text", text:`Summarize my "${cat.name}" category` });
+    pushMessage({ role:"ai", kind:"loading", text:`Summarizing "${cat.name}"…` });
+    try {
+      const r = await summarizeMut.mutateAsync({ categoryId: cat.id });
+      updateLastMessage(() => ({ role:"ai", kind:"summary", text:r.summary, keyTopics:r.keyTopics||[], categoryName:cat.name }));
+    } catch (err) {
+      updateLastMessage(() => ({ role:"ai", kind:"text", text: err?.message || "Could not summarize category." }));
+    } finally {
+      setBusyChip(null);
+    }
+  };
+
+  const runDuplicates = async () => {
+    if (busyChip) return;
+    setBusyChip("duplicates");
+    pushMessage({ role:"user", kind:"text", text:"Find duplicates" });
+    pushMessage({ role:"ai", kind:"loading", text:"Scanning for duplicates…" });
+    try {
+      const r = await duplicatesMut.mutateAsync({});
+      const bmById = new Map(allBookmarks.map(b => [b.id, b]));
+      const semanticPairs = (r.duplicates||[]).map(d => ({
+        a: bmById.get(d.a) || { id:d.a, title:d.a, url:"" },
+        b: bmById.get(d.b) || { id:d.b, title:d.b, url:"" },
+        similarity: d.similarity,
+      }));
+      const urlGroups = r.urlDuplicateGroups || [];
+      if (semanticPairs.length === 0 && urlGroups.length === 0) {
+        updateLastMessage(() => ({ role:"ai", kind:"text", text:"No duplicates found. Your library is clean! ✨" }));
+      } else {
+        updateLastMessage(() => ({ role:"ai", kind:"duplicates", text:"Here's what I found:", urlGroups, semanticPairs }));
+      }
+    } catch (err) {
+      updateLastMessage(() => ({ role:"ai", kind:"text", text: err?.message || "Could not check for duplicates." }));
+    } finally {
+      setBusyChip(null);
+    }
+  };
+
+  const deleteDuplicate = async id => {
+    try {
+      await deleteBmMut.mutateAsync({ id });
+      patchMessage(
+        m => m.kind === "duplicates",
+        m => ({
+          ...m,
+          urlGroups: (m.urlGroups||[]).map(g => ({ ...g, bookmarks: g.bookmarks.filter(b => b.id !== id) })).filter(g => g.bookmarks.length > 1),
+          semanticPairs: (m.semanticPairs||[]).filter(p => p.a.id !== id && p.b.id !== id),
+        }),
+      );
+      onBookmarksChanged?.();
+    } catch (err) {
+      pushMessage({ role:"ai", kind:"text", text: err?.message || "Could not delete bookmark." });
+    }
+  };
+
+  const runReorganize = async () => {
+    if (busyChip) return;
+    setBusyChip("reorganize");
+    pushMessage({ role:"user", kind:"text", text:"Reorganize ideas" });
+    pushMessage({ role:"ai", kind:"loading", text:"Thinking about your library structure…" });
+    try {
+      const r = await reorganizeMut.mutateAsync({});
+      if (!r.suggestions || r.suggestions.length === 0) {
+        updateLastMessage(() => ({ role:"ai", kind:"text", text: r.notice || "No reorganization suggestions right now." }));
+      } else {
+        updateLastMessage(() => ({ role:"ai", kind:"reorganize", text:"Here are some ideas:", suggestions:r.suggestions }));
+      }
+    } catch (err) {
+      updateLastMessage(() => ({ role:"ai", kind:"text", text: err?.message || "Could not generate suggestions." }));
+    } finally {
+      setBusyChip(null);
+    }
+  };
+
   if (!open) return null;
 
-  const suggestions = [
-    "Suggest tags for all my bookmarks",
-    "Summarize my Dev Tools category",
-    "Find duplicate or similar bookmarks",
-    "Which categories should I reorganize?",
+  const chips = [
+    { key:"autotag", label:"Auto-tag recent", fn:runAutoTag },
+    { key:"summarize", label:"Summarize a category", fn:runSummarize },
+    { key:"duplicates", label:"Find duplicates", fn:runDuplicates },
+    { key:"reorganize", label:"Reorganize ideas", fn:runReorganize },
   ];
 
   return (
@@ -2531,7 +2006,103 @@ function AiPanel({ open, onClose, categories }) {
               background:m.role==="ai" ? T.bgPanel : T.primary+"18",
               border:m.role==="ai" ? `1px solid ${T.border}` : `1px solid ${T.primary}30`,
               whiteSpace:"pre-wrap", wordBreak:"break-word",
-            }}>{m.text}</div>
+            }}>
+              {m.kind === "loading" && (
+                <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
+                  {m.text}
+                  <span style={{ display:"flex", gap:3 }}>
+                    {[0,1,2].map(j=><span key={j} style={{ width:4, height:4, background:T.primary, borderRadius:"50%", opacity:0.6, animation:`mmPulse 1s ease ${j*0.15}s infinite` }} />)}
+                  </span>
+                </span>
+              )}
+
+              {(!m.kind || m.kind === "text") && m.text}
+
+              {m.kind === "autotag" && (
+                <div>
+                  <div style={{ marginBottom:8 }}>{m.text}</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {m.items.map(it => (
+                      <div key={it.id} style={{ background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 10px" }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{it.title}</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:6 }}>
+                          {it.suggestedTags.map(t => <Tag key={t} tag={t} small />)}
+                          {it.suggestedTags.length === 0 && <span style={{ fontSize:11, color:T.textMuted }}>No new tags suggested</span>}
+                        </div>
+                        <button onClick={()=>applyAutoTag(it)} disabled={it.applied || it.suggestedTags.length===0}
+                          style={{ ...S.btn, padding:"3px 10px", fontSize:11, fontWeight:700, background:it.applied?T.success+"20":T.primary, color:it.applied?T.success:T.onPrimary, opacity:(it.applied||it.suggestedTags.length===0)?0.7:1 }}>
+                          {it.applied ? <><I.Check /> Applied</> : "Apply"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {m.kind === "summary" && (
+                <div>
+                  <div style={{ marginBottom:8 }}>{m.text}</div>
+                  {m.keyTopics?.length > 0 && (
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:3 }}>
+                      {m.keyTopics.map(t => <Tag key={t} tag={t} small />)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {m.kind === "duplicates" && (
+                <div>
+                  <div style={{ marginBottom:8 }}>{m.text}</div>
+                  {m.urlGroups?.length > 0 && (
+                    <div style={{ marginBottom:10 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:5 }}>Same URL</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {m.urlGroups.map((g,gi) => (
+                          <div key={gi} style={{ background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 10px" }}>
+                            {g.bookmarks.map(b => (
+                              <div key={b.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:4 }}>
+                                <span style={{ fontSize:12, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b.title}</span>
+                                <button onClick={()=>deleteDuplicate(b.id)} aria-label={`Delete ${b.title}`} style={{ ...S.btn, padding:"2px 8px", fontSize:10, fontWeight:700, background:"transparent", color:T.error, border:`1px solid ${T.error}30`, flexShrink:0 }}><I.Trash /> Delete</button>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {m.semanticPairs?.length > 0 && (
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:700, color:T.textMuted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:5 }}>Similar bookmarks</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {m.semanticPairs.map((p,pi) => (
+                          <div key={pi} style={{ background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 10px" }}>
+                            {[p.a,p.b].map(b => (
+                              <div key={b.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:4 }}>
+                                <span style={{ fontSize:12, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b.title}</span>
+                                <button onClick={()=>deleteDuplicate(b.id)} aria-label={`Delete ${b.title}`} style={{ ...S.btn, padding:"2px 8px", fontSize:10, fontWeight:700, background:"transparent", color:T.error, border:`1px solid ${T.error}30`, flexShrink:0 }}><I.Trash /> Delete</button>
+                              </div>
+                            ))}
+                            <div style={{ fontSize:10, color:T.textMuted }}>{Math.round(p.similarity*100)}% similar</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {m.kind === "reorganize" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  <div>{m.text}</div>
+                  {m.suggestions.map((s,si) => (
+                    <div key={si} style={{ background:T.bgInput, border:`1px solid ${T.border}`, padding:"8px 10px" }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:2 }}>{s.action}</div>
+                      <div style={{ fontSize:11, color:T.textMuted }}>{s.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {loading && (
@@ -2544,15 +2115,15 @@ function AiPanel({ open, onClose, categories }) {
         )}
       </div>
 
-      {/* Quick suggestions */}
+      {/* Quick actions */}
       {messages.length <= 1 && !loading && (
         <div style={{ padding:"0 18px 8px", display:"flex", flexWrap:"wrap", gap:4 }}>
-          {suggestions.map((s,i) => (
-            <button key={i} onClick={()=>{setInput(s);}} style={{
-              ...S.btn, padding:"4px 10px", fontSize:10, fontWeight:600, background:T.primarySubtle, color:T.primary, border:`1px solid ${T.primary}25`, textAlign:"left",
+          {chips.map(c => (
+            <button key={c.key} onClick={c.fn} disabled={!!busyChip} style={{
+              ...S.btn, padding:"4px 10px", fontSize:10, fontWeight:600, background:T.primarySubtle, color:T.primary, border:`1px solid ${T.primary}25`, textAlign:"left", opacity:busyChip?0.6:1,
             }}
-              onMouseEnter={e=>e.currentTarget.style.background=T.primary+"25"} onMouseLeave={e=>e.currentTarget.style.background=T.primarySubtle}
-            >{s}</button>
+              onMouseEnter={e=>{if(!busyChip)e.currentTarget.style.background=T.primary+"25"}} onMouseLeave={e=>e.currentTarget.style.background=T.primarySubtle}
+            >{busyChip===c.key ? "Working…" : c.label}</button>
           ))}
         </div>
       )}
@@ -2678,6 +2249,13 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!online || isPending) return;
+    if ((page === "dashboard" || page === "profile") && !user && !neonUser) {
+      navigate("login");
+    }
+  }, [page, user, neonUser, isPending, online]);
+
   const logout = async () => {
     await clearLastUser();
     if (online) await authClient.signOut();
@@ -2724,8 +2302,6 @@ export default function App() {
         {page === "signup" && <ErrorBoundary fallbackTitle="Auth error" fallbackMessage="The signup form encountered an error."><AuthPage mode="signup" onNavigate={navigate} /></ErrorBoundary>}
         {page === "profile" && user && <ErrorBoundary fallbackTitle="Profile error" fallbackMessage="The profile page encountered an error."><ProfilePage user={user} onUpdate={setUser} onNavigate={navigate} onLogout={logout} stats={appStats} /></ErrorBoundary>}
         {page === "dashboard" && user && <ErrorBoundary fallbackTitle="Dashboard error" fallbackMessage="The dashboard encountered an error. Your data is safe."><Dashboard user={user} onNavigate={navigate} onLogout={logout} /></ErrorBoundary>}
-        {page === "dashboard" && !user && !isPending && !neonUser && online && (() => { setPage("login"); return null; })()}
-        {page === "profile" && !user && !isPending && !neonUser && online && (() => { setPage("login"); return null; })()}
       </PageTransition>
     </>
   );

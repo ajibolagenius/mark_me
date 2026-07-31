@@ -36,6 +36,8 @@ export type OutboxProcedure =
   | "bookmark.delete"
   | "bookmark.togglePin";
 
+export type OutboxEntryStatus = "pending" | "failed";
+
 export type OutboxEntry = {
   id: string;
   procedure: OutboxProcedure;
@@ -43,4 +45,11 @@ export type OutboxEntry = {
   createdAt: number;
   /** Client-generated id used for optimistic creates so sync can remap. */
   clientId?: string;
+  status?: OutboxEntryStatus;
+  attempts?: number;
+  lastError?: {
+    message: string;
+    code?: string;
+    at: number;
+  };
 };

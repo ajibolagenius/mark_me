@@ -6,13 +6,20 @@ export {
   getOutbox,
   setLastUser,
 } from "./storage";
-export { flushOutbox } from "./sync";
+export {
+  discardAllFailed,
+  discardOutboxEntry,
+  flushOutbox,
+  retryOutboxEntry,
+} from "./sync";
 export {
   notifyOutboxChanged,
   useOnlineStatus,
   useOutboxCount,
+  useOutboxEntries,
+  useOutboxFailedCount,
 } from "./hooks";
-export { queueAndPatch } from "./mutations";
+export { queueAndPatch, remapOptimisticId } from "./mutations";
 export type {
   BookmarkListItem,
   CategoryListItem,
