@@ -1,11 +1,14 @@
 import { bookmarks } from "@markme/db/schema";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
 import { z } from "zod";
 import { mapBookmark } from "../lib/mappers";
 import { requireBookmarkForUser, requireCategoryForUser } from "../lib/ownership";
 import {
+  batchDeleteBookmarksSchema,
+  batchUpdateCategorySchema,
+  batchUpdateTagsSchema,
   createBookmarkSchema,
   listBookmarksSchema,
   searchBookmarksSchema,
@@ -142,4 +145,56 @@ export const bookmarkRouter = router({
       .limit(input.limit);
     return rows.map(mapBookmark);
   }),
+
+  batchUpdateCategory: protectedProcedure
+    .input(batchUpdateCategorySchema)
+    .mutation(async ({ ctx, input }) => {
+      await requireCategoryForUser(ctx.db, ctx.session.userId, input.targetCategoryId);
+      if (input.bookmarkIds.length === 0) return { updated: 0 };
+      await ctx.db
+        .update(bookmarks)
+        .set({ categoryId: input.targetCategoryId })
+        .where(
+          and(
+            eq(bookmarks.userId, ctx.session.userId),
+            inArray(bookmarks.id, input.bookmarkIds),
+          ),
+        );
+      return { updated: input.bookmarkIds.length };
+    }),
+
+  batchUpdateTags: protectedProcedure
+    .input(batchUpdateTagsSchema)
+    .mutation(async ({ ctx, input }) => {
+      let updatedCount = 0;
+      for (const item of input.updates) {
+        await ctx.db
+          .update(bookmarks)
+          .set({ tags: item.tags })
+          .where(
+            and(
+              eq(bookmarks.id, item.bookmarkId),
+              eq(bookmarks.userId, ctx.session.userId),
+            ),
+          );
+        updatedCount++;
+      }
+      return { updated: updatedCount };
+    }),
+
+  batchDelete: protectedProcedure
+    .input(batchDeleteBookmarksSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (input.bookmarkIds.length === 0) return { deleted: 0 };
+      await ctx.db
+        .delete(bookmarks)
+        .where(
+          and(
+            eq(bookmarks.userId, ctx.session.userId),
+            inArray(bookmarks.id, input.bookmarkIds),
+          ),
+        );
+      return { deleted: input.bookmarkIds.length };
+    }),
 });
+

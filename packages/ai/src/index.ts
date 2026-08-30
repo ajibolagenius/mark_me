@@ -16,10 +16,18 @@ export {
     duplicateResultSchema,
     reorgResultSchema,
     summaryResultSchema,
+    autoOrganizeResultSchema,
+    cleanTagsResultSchema,
+    batchTagResultSchema,
+    digestResultSchema,
     type AutoTagResult,
     type DuplicateResult,
     type ReorgResult,
     type SummaryResult,
+    type AutoOrganizeResult,
+    type CleanTagsResult,
+    type BatchTagResult,
+    type DigestResult,
 } from "./schemas";
 export {
     autoTagUserPrompt,
@@ -27,6 +35,10 @@ export {
     reorgUserPrompt,
     summarizeUserPrompt,
     systemPromptWithBookmarkContext,
+    autoOrganizeUserPrompt,
+    cleanTagsUserPrompt,
+    batchTagUserPrompt,
+    digestUserPrompt,
 } from "./prompts";
 export {
     createBookmarkAssistantStream,
@@ -38,4 +50,9 @@ export {
     runDuplicatesStructured,
     runReorganizeStructured,
     runSummarizeStructured,
+    runAutoOrganizeStructured,
+    runCleanTagsStructured,
+    runBatchTagStructured,
+    runDigestStructured,
 } from "./structured";
+

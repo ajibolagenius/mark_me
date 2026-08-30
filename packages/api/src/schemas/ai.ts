@@ -20,3 +20,20 @@ export const aiDetectDuplicatesSchema = z.object({
 export const aiReorganizeSchema = z.object({
   hint: z.string().max(500).optional(),
 });
+
+export const aiAutoOrganizeSchema = z.object({
+  categoryId: z.string().optional(),
+});
+
+export const aiCleanTagsSchema = z.object({
+  limit: z.number().int().min(1).max(300).default(200),
+});
+
+export const aiBatchTagSchema = z.object({
+  bookmarkIds: z.array(z.string()).max(40).optional(),
+});
+
+export const aiDigestSchema = z.object({
+  topicOrTimeframe: z.string().max(300).optional(),
+});
+

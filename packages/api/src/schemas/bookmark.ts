@@ -32,3 +32,24 @@ export const searchBookmarksSchema = z.object({
   query: z.string().min(1).max(500),
   limit: z.number().int().min(1).max(100).default(50),
 });
+
+export const batchUpdateCategorySchema = z.object({
+  bookmarkIds: z.array(z.string().min(1)).min(1).max(100),
+  targetCategoryId: z.string().min(1),
+});
+
+export const batchUpdateTagsSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        bookmarkId: z.string().min(1),
+        tags: z.array(z.string()),
+      }),
+    )
+    .max(200),
+});
+
+export const batchDeleteBookmarksSchema = z.object({
+  bookmarkIds: z.array(z.string().min(1)).min(1).max(100),
+});
+
