@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "mark_me",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Save and organize bookmarks with AI assistance. Quick-save from any page, search from a beautiful New Tab.",
   "author": "Ajibola Akelebe",
   "action": {
