@@ -32,3 +32,11 @@ export { ConfirmDialog } from "./components/confirm-dialog";
 export { SwipeRow } from "./components/swipe-row";
 export { PullToRefresh } from "./components/pull-to-refresh";
 export { MobileNavOverlay } from "./components/mobile-nav-overlay";
+export { TagFilterBar } from "./components/tag-filter-bar";
+export type { TagWithCount } from "./components/tag-filter-bar";
+export { ViewModeToggle } from "./components/view-mode-toggle";
+export type { ViewMode } from "./components/view-mode-toggle";
+export { CompactBookmarkTable } from "./components/compact-bookmark-table";
+export type { FlatBookmarkItem } from "./components/compact-bookmark-table";
+export { RichBookmarkCard } from "./components/rich-bookmark-card";
+
